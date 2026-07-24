@@ -33,16 +33,25 @@ writeFileSync(
   }),
 );
 
+// init walks the tree and reads .gitignore, so it exercises fs paths the
+// smoke run never touches. It writes a config, so give it its own directory.
+const initDir = mkdtempSync(join(tmpdir(), "hyperfixer-compat-init-"));
+writeFileSync(join(initDir, "tsconfig.json"), "{}");
+writeFileSync(join(initDir, "src/a.ts".replace("src/", "")), "export {}\n");
+
 try {
   if (has("node")) {
     run("node --help", ["node", cliJs, "--help"]);
     run("node run fixture", ["node", cliJs, "run", "--quiet"], fixture);
+    run("node init", ["node", cliJs, "init"], initDir);
   } else {
     console.log("compat: node not installed, skipped");
   }
   if (has("deno")) {
     run("deno --help", ["deno", "run", "--allow-all", cliJs, "--help"]);
     run("deno run fixture", ["deno", "run", "--allow-all", cliJs, "run", "--quiet"], fixture);
+    rmSync(join(initDir, "hyperfixer.config.json"), { force: true });
+    run("deno init", ["deno", "run", "--allow-all", cliJs, "init"], initDir);
   } else {
     console.log("compat: deno not installed, skipped");
   }
@@ -51,5 +60,6 @@ try {
   }
 } finally {
   rmSync(fixture, { recursive: true, force: true });
+  rmSync(initDir, { recursive: true, force: true });
 }
 console.log("compat: all installed runtimes green");

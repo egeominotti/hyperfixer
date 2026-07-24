@@ -6,8 +6,8 @@ import { detectGates } from "./initgen.ts";
 import { acquireLock } from "./lock.ts";
 import { readVerdict, renderHuman, writeVerdict } from "./report.ts";
 import { exitCodeFor, runPipeline, spawnExecutor } from "./runner.ts";
-import { fileExists, writeTextFile } from "./runtime.ts";
-import type { HyperfixerConfig } from "./types.ts";
+import { fileExists, writeStdout, writeTextFile } from "./runtime.ts";
+import type { GateSpec, HyperfixerConfig } from "./types.ts";
 
 const STALE_AFTER_MS = 10 * 60_000;
 
@@ -15,6 +15,8 @@ export interface RunFlags {
   json: boolean;
   quiet: boolean;
   configPath: string;
+  /** True when --config named the path, so a missing file is a setup error. */
+  configExplicit: boolean;
   only: string[] | null;
   noFailFast: boolean;
   outDir: string | null;
@@ -29,7 +31,7 @@ export async function cmdRun(
 ): Promise<number> {
   let config: HyperfixerConfig;
   try {
-    config = await loadConfig(flags.configPath);
+    config = await loadConfig(flags.configPath, flags.configExplicit);
   } catch (e) {
     console.error(red(e instanceof Error ? e.message : String(e)));
     return 2;
@@ -65,7 +67,13 @@ export async function cmdRun(
       console.error(red("--changed requires a git repository"));
       return 2;
     }
-    config.gates = applyChanged(config.gates, files);
+    // Our own output directory changes on every run: feeding it back into the
+    // gates makes the second run fail on verdict.json.
+    const own = `${config.outDir.replace(/\/+$/, "")}/`;
+    config.gates = applyChanged(
+      config.gates,
+      files.filter((f) => !f.startsWith(own)),
+    );
   }
 
   const lock = opts.skipLock ? null : acquireLock(config.outDir);
@@ -83,18 +91,29 @@ export async function cmdRun(
     const exec = cache === null ? spawnExecutor : cachingExecutor(spawnExecutor, cache);
     const verdict = await runPipeline(config, exec);
     if (fingerprint !== null) verdict.inputsFingerprint = fingerprint;
+    // Record what --only and --max-cost held back: without it a partial green
+    // verdict is indistinguishable from a full one, on disk and to hint.
+    const filtered = filteredGateNames(pristineGates, config.gates);
+    if (filtered.length > 0) verdict.filteredGates = filtered;
     if (cache !== null) await saveCache(config.outDir, cache);
     const path = await writeVerdict(verdict, config.outDir);
     if (flags.json) {
-      console.log(JSON.stringify(verdict, null, 2));
+      await writeStdout(`${JSON.stringify(verdict, null, 2)}\n`);
     } else if (!flags.quiet) {
-      console.log(renderHuman(verdict));
-      console.log(dim(`verdict: ${path}`));
+      await writeStdout(`${renderHuman(verdict)}\n${dim(`verdict: ${path}`)}\n`);
     }
     return exitCodeFor(verdict);
   } finally {
     if (lock?.ok) lock.release();
   }
+}
+
+/** Gates the pristine config would have run that the effective one will not. */
+function filteredGateNames(pristine: GateSpec[], effective: GateSpec[]): string[] {
+  const off = new Set(effective.filter((g) => g.enabled === false).map((g) => g.name));
+  return pristine
+    .filter((g) => g.enabled !== false && off.has(g.name))
+    .map((g) => g.name);
 }
 
 export async function cmdInit(): Promise<number> {
@@ -115,17 +134,20 @@ export async function cmdInit(): Promise<number> {
 }
 
 /** Print the last verdict's first actionable hint, for agent consumption. */
-export async function cmdHint(configPath: string): Promise<number> {
+export async function cmdHint(flags: RunFlags): Promise<number> {
   let config: HyperfixerConfig;
   try {
-    config = await loadConfig(configPath);
+    config = await loadConfig(flags.configPath, flags.configExplicit);
   } catch (e) {
     console.error(red(e instanceof Error ? e.message : String(e)));
     return 2;
   }
-  const verdict = await readVerdict(config.outDir);
+  // Honour --out-dir: reading the default directory instead would answer with
+  // some other run's verdict, and a stale green is the worst answer of all.
+  const outDir = flags.outDir ?? config.outDir;
+  const verdict = await readVerdict(outDir);
   if (!verdict) {
-    console.error(`no verdict found in ${config.outDir}/, run "hyperfixer run" first`);
+    console.error(`no verdict found in ${outDir}/, run "hyperfixer run" first`);
     return 2;
   }
   // Content beats clock: when the verdict carries an inputs fingerprint,
@@ -142,8 +164,18 @@ export async function cmdHint(configPath: string): Promise<number> {
       console.error('warning: verdict may be stale, re-run "hyperfixer run"');
     }
   }
+  // A green verdict from a filtered run only covers the gates that ran: say
+  // so, or an agent reads "OK" as proof the whole pipeline passes. The field
+  // comes off disk, so a hand edited verdict must not be able to crash hint.
+  const filtered = Array.isArray(verdict.filteredGates) ? verdict.filteredGates : [];
+  const partial =
+    filtered.length > 0
+      ? `, ${filtered.length} gate(s) not run (${filtered.join(", ")}), verify with a full run`
+      : "";
   console.log(
-    verdict.ok ? "OK, nothing to fix" : (verdict.hint ?? "FAIL, see verdict.json"),
+    verdict.ok
+      ? `OK, nothing to fix${partial}`
+      : (verdict.hint ?? "FAIL, see verdict.json"),
   );
   return exitCodeFor(verdict);
 }

@@ -33,7 +33,7 @@ Task runners that order and cache commands already exist. What hyperfixer adds i
 - **Structured verdict** on disk: per-gate status, structured `findings` with file and line, timings, `outputTail`, `generatedAt`.
 - **One-line `hint`**: the first blocking problem, pre-formatted as `[gate] file:line, message`, the exact string to feed back to the agent.
 - **Staleness guard by content**: the verdict stores a fingerprint of every gate's inputs; `hint` recomputes it and warns only when the code actually changed, no clock guessing.
-- **No false greens**: an empty pipeline (over-filtered `--max-cost`, all gates disabled) is exit 1, failures are never cached, and property tests print fast-check replay data (seed, path, counterexample) into the verdict so the agent can re-run the exact failing case.
+- **No false greens**: an empty pipeline (over-filtered `--max-cost`, all gates disabled) is exit 2, never a green; a config path passed with `--config` that does not exist is exit 2 instead of a silent fallback to the built-in gates; a malformed gate field is exit 2 instead of a silently skipped gate; a gate whose `inputs` match no file is never cached (a constant hash could never invalidate), and `doctor` flags any pattern that resolves to nothing, because a gate whose inputs only partly resolve caches on a key blind to the rest; a filtered run records `filteredGates` so a partial green cannot pass for a full one; failures are never cached; and property tests print fast-check replay data (seed, path, counterexample) into the verdict so the agent can re-run the exact failing case.
 
 ## Why layers
 
@@ -107,7 +107,7 @@ Run flags:
   --out-dir <dir>       verdict output directory (default .hyperfixer)
 ```
 
-Exit codes: `0` all gates pass, `1` a gate failed (fix code), `2` setup problem (config error, empty pipeline, lock held), `3` gate infrastructure failed (timeout, tool crash, do not edit code). The contract is strict: agents branch on the exit code alone.
+Exit codes: `0` every gate that ran passed, `1` a gate failed (fix code), `2` setup problem (config error, missing `--config` file, empty pipeline, lock held), `3` gate infrastructure failed (timeout, tool crash, do not edit code). The contract is strict: agents branch on the exit code alone. `--only` and `--max-cost` make a run a subset, so a `0` from a filtered run only covers the gates it ran; the verdict names the rest in `filteredGates` and `hint` repeats them.
 
 ## Configuration
 
@@ -118,11 +118,11 @@ Exit codes: `0` all gates pass, `1` a gate failed (fix code), `2` setup problem 
   "failFast": true,
   "outDir": ".hyperfixer",
   "gates": [
-    { "name": "lint",      "cost": 5,   "command": ["bunx", "biome", "check", "."] },
+    { "name": "lint",      "cost": 5,   "command": ["bunx", "@biomejs/biome", "check", "."] },
     { "name": "typecheck", "cost": 10,  "command": ["bunx", "tsc", "--noEmit", "--pretty", "false"], "parser": "tsc" },
     { "name": "unit",      "cost": 30,  "command": ["bun", "test"], "parser": "bun-test" },
     { "name": "pbt",       "cost": 40,  "command": ["bun", "test", "test/property"], "parser": "bun-test" },
-    { "name": "mutation",  "cost": 100, "command": ["bunx", "stryker", "run", "--incremental"], "enabled": false, "optional": true }
+    { "name": "mutation",  "cost": 100, "command": ["bunx", "@stryker-mutator/core", "run", "--incremental"], "enabled": false, "optional": true }
   ]
 }
 ```
@@ -141,6 +141,8 @@ Exit codes: `0` all gates pass, `1` a gate failed (fix code), `2` setup problem 
 Gate names must be unique; duplicates are rejected at load time. A hanging gate cannot wedge an unattended agent loop: it is killed at `timeoutMs` (SIGTERM, then SIGKILL) and reported as `error`. Gates with equal `cost` run concurrently as a group; fail-fast blocks later groups only.
 
 **Caching**: a gate that declares `inputs` stores its passing result keyed by a hash of command + **file contents**. Touching a file or a checkout that rewrites identical bytes never invalidates; a real content change always does. Failures are never cached; `--no-cache` bypasses it.
+
+`inputs` must cover everything the command reads. The key is built from the files the patterns resolve to, so anything outside them, a source directory you forgot, a dependency, a config the tool loads itself, is a change the cache cannot see. `hyperfixer doctor` reports patterns that match nothing, and a gate whose patterns all match nothing is never cached at all.
 
 **Changed-only mode**: put `{changed}` in a gate command and run with `--changed`; the token expands to the files git reports as modified, and the gate is skipped entirely when the tree is clean.
 
@@ -193,6 +195,7 @@ This writes (or merges into) `.claude/settings.json` a [PreToolUse hook](https:/
   "generatedAt": "2026-07-24T10:30:00.000Z",
   "inputsFingerprint": "sha256…",              // content-based staleness guard
   "failedGate": "typecheck",
+  "filteredGates": ["mutation"],               // held back by --only or --max-cost
   "hint": "[typecheck] src/service.ts:42, Type 'string' is not assignable…",
   "durationMs": 533,
   "gates": [
@@ -204,11 +207,17 @@ This writes (or merges into) `.claude/settings.json` a [PreToolUse hook](https:/
       "findings": [
         { "file": "src/service.ts", "line": 42, "column": 5, "code": "TS2322", "message": "…" }
       ],
-      "outputTail": "…"
+      "findingsTotal": 4300,                   // only when findings were capped
+      "outputTail": "…",
+      "note": "3300 more findings not recorded" // why it was skipped, errored, capped or cached
     }
   ]
 }
 ```
+
+`findings` is capped at 1000 per gate so the file stays readable; when a tool reports more, `findingsTotal` and `note` carry the real count, and both `hint` and the human report quote it. `cached: true` marks a result served from the input-hash cache.
+
+`filteredGates` is present only when gates were held back, by `--only`, `--max-cost`, or `--changed` when nothing a gate watches changed. A green verdict that carries it covers the gates that ran, nothing more, and `hint` says so.
 
 `hint` warns on stderr when the verdict is older than 10 minutes, so an agent that edited code without re-running cannot trust a stale "OK".
 

@@ -18,7 +18,9 @@ export function changedFiles(cwd = "."): string[] | null {
       const entry = tokens[i];
       if (entry === undefined || entry.length < 4) continue;
       const status = entry.slice(0, 2);
-      files.push(entry.slice(3));
+      // A deleted path cannot be linted or compiled: feeding it to a gate
+      // fails on a file the agent was right to remove, with no way to fix it.
+      if (!status.includes("D")) files.push(entry.slice(3));
       // Renames/copies carry the origin path as the next NUL field, skip it.
       if (status.includes("R") || status.includes("C")) i++;
     }

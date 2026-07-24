@@ -29,7 +29,8 @@ src/
   types.ts      # all shared types (GateSpec, GateResult, Verdict, Finding)
   config.ts     # config load/validate + DEFAULT_GATES (the canonical gate list)
   parsers.ts    # tsc / bun-test output to structured Finding[]
-  runtime.ts    # portability layer (spawn, fs, hash, stdin), node builtins only
+  runtime.ts    # portability layer (fs, hash, stdin), node builtins only
+  spawn.ts      # spawn half of the portability layer, re-exported by runtime.ts
   glob.ts       # minimal portable glob
   lock.ts       # one run per repo, atomic lock with stale steal
   runner.ts     # pipeline: cost groups in parallel, timeout, fail-fast, hint, exit codes
@@ -42,6 +43,7 @@ src/
   doctor.ts     # toolchain and config health checks
   parsers-json.ts # eslint-json and generic findings-json parsers
   initgen.ts    # smart init: stack detection, tailored gate list
+  inputs.ts     # derive a gate's cache inputs from the tree
   claude.ts     # Claude Code integration (install-claude, claude-hook)
   hooks.ts      # git hook installer (pre-commit, pre-push)
   cli.ts        # entry point: arg parsing + dispatch only

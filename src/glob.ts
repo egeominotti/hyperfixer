@@ -1,4 +1,4 @@
-import { type Dirent, existsSync, readdirSync } from "node:fs";
+import { type Dirent, readdirSync, statSync } from "node:fs";
 
 function globToRegExp(pattern: string): RegExp {
   let re = "";
@@ -44,15 +44,25 @@ function walkFiles(root: string, prefix: string, out: string[]): void {
   }
 }
 
+function isFile(path: string): boolean {
+  try {
+    return statSync(path).isFile();
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Minimal glob over regular files, relative paths, dotfiles and node_modules
- * excluded. Supports "**", "*" and "?". Walks only the static prefix.
+ * excluded. Supports "**", "*" and "?". Walks only the static prefix. A
+ * pattern naming a directory yields nothing: callers hash file content, and a
+ * directory would otherwise contribute a constant "unreadable" marker.
  */
 export function globSync(pattern: string, cwd = "."): string[] {
   const segments = pattern.split("/");
   const wildIdx = segments.findIndex((s) => /[*?]/.test(s));
   if (wildIdx === -1) {
-    return existsSync(`${cwd}/${pattern}`) ? [pattern] : [];
+    return isFile(`${cwd}/${pattern}`) ? [pattern] : [];
   }
   const base = segments.slice(0, wildIdx).join("/");
   const files: string[] = [];

@@ -7,7 +7,7 @@
       "cost": 5,
       "command": [
         "bunx",
-        "biome",
+        "@biomejs/biome",
         "check",
         "."
       ],
@@ -19,7 +19,7 @@
       ],
       "fixCommand": [
         "bunx",
-        "biome",
+        "@biomejs/biome",
         "check",
         "--write",
         "."
@@ -39,6 +39,7 @@
       "inputs": [
         "src/**",
         "test/**",
+        "scripts/**",
         "tsconfig.json"
       ]
     },
@@ -63,9 +64,12 @@
         "bun",
         "test",
         "test/runner.test.ts",
+        "test/executor.test.ts",
+        "test/initgen.test.ts",
         "test/parsers.test.ts",
         "test/parsers-json.test.ts",
         "test/cache.test.ts",
+        "test/config.test.ts",
         "test/changed.test.ts",
         "test/lock.test.ts",
         "test/runtime.test.ts"
@@ -73,7 +77,12 @@
       "parser": "bun-test",
       "inputs": [
         "src/**",
-        "test/*.test.ts"
+        "test/*.test.ts",
+        "hyperfixer.config.json",
+        "biome.json",
+        "tsconfig.json",
+        "tsconfig.build.json",
+        "stryker.conf.json"
       ]
     },
     {
@@ -128,6 +137,7 @@
       "optional": true,
       "inputs": [
         "src/**",
+        "scripts/**",
         "tsconfig.build.json"
       ]
     },
@@ -136,7 +146,7 @@
       "cost": 100,
       "command": [
         "bunx",
-        "stryker",
+        "@stryker-mutator/core",
         "run"
       ],
       "parser": "raw",

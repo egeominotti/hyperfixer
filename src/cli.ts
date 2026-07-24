@@ -30,7 +30,8 @@ Run flags:
   --out-dir <dir>       verdict output directory (default .hyperfixer)
 
 Exit codes:
-  0 all gates pass
+  0 every gate that ran passed (--only and --max-cost make that a subset,
+    the verdict lists what was held back in filteredGates)
   1 a gate failed, fix CODE, read the hint
   2 setup problem, config error, empty pipeline, lock held, fix SETUP
   3 gate infrastructure failed, timeout or tool crash, do NOT edit code`;
@@ -40,6 +41,7 @@ function parseRunFlags(args: string[]): RunFlags | null {
     json: false,
     quiet: false,
     configPath: CONFIG_FILE,
+    configExplicit: false,
     only: null,
     noFailFast: false,
     outDir: null,
@@ -75,6 +77,7 @@ function parseRunFlags(args: string[]): RunFlags | null {
         const v = next();
         if (v === undefined) return null;
         flags.configPath = v;
+        flags.configExplicit = true;
         break;
       }
       case "--only": {
@@ -111,35 +114,42 @@ function parseRunFlags(args: string[]): RunFlags | null {
   return flags;
 }
 
-function findConfigFlag(args: string[]): string {
-  const i = args.indexOf("--config");
-  const value = i === -1 ? undefined : args[i + 1];
-  return value ?? CONFIG_FILE;
-}
+/** Commands that read the config, and so must agree on --config and --out-dir. */
+const CONFIG_AWARE = new Set(["run", "fix", "hint", "doctor", "claude-hook"]);
+/** Commands that take no arguments at all. */
+const NO_ARGS = new Set(["init", "install-hooks", "install-claude"]);
 
 async function main(argv: string[]): Promise<number> {
   const [cmd, ...rest] = argv;
+  // Every config-aware command parses the same flags: hint reading the default
+  // out-dir while run wrote elsewhere would answer from another run's verdict.
+  const aware = cmd !== undefined && CONFIG_AWARE.has(cmd);
+  const flags = aware ? parseRunFlags(rest) : null;
+  if (aware && flags === null) return 2;
+  // Silently ignoring an argument would let a user believe that
+  // "init --config other.json" wrote where they asked; it never does.
+  const stray = cmd !== undefined && NO_ARGS.has(cmd) ? rest[0] : undefined;
+  if (stray !== undefined) {
+    console.error(`${cmd} takes no arguments, got ${stray}`);
+    return 2;
+  }
   switch (cmd) {
-    case "run": {
-      const flags = parseRunFlags(rest);
+    case "run":
       return flags === null ? 2 : cmdRun(flags);
-    }
-    case "fix": {
-      const flags = parseRunFlags(rest);
+    case "fix":
       return flags === null ? 2 : cmdFix(flags);
-    }
     case "init":
       return cmdInit();
     case "hint":
-      return cmdHint(findConfigFlag(rest));
+      return flags === null ? 2 : cmdHint(flags);
     case "doctor":
-      return cmdDoctor(findConfigFlag(rest));
+      return flags === null ? 2 : cmdDoctor(flags);
     case "install-hooks":
       return cmdInstallHooks();
     case "install-claude":
       return cmdInstallClaude();
     case "claude-hook":
-      return cmdClaudeHook(findConfigFlag(rest));
+      return flags === null ? 2 : cmdClaudeHook(flags);
     case undefined:
     case "--help":
     case "-h":
@@ -152,11 +162,12 @@ async function main(argv: string[]): Promise<number> {
   }
 }
 
-let exitCode: number;
 try {
-  exitCode = await main(process.argv.slice(2));
+  // Setting exitCode instead of calling process.exit: on Node and Bun a pipe
+  // is written asynchronously, and exiting outright discards whatever is still
+  // queued, truncating --json output at the pipe buffer size.
+  process.exitCode = await main(process.argv.slice(2));
 } catch (e) {
   console.error(e instanceof Error ? e.message : String(e));
-  exitCode = 2;
+  process.exitCode = 2;
 }
-process.exit(exitCode);

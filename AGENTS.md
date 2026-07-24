@@ -39,11 +39,15 @@ bun install          # Bun >= 1.1 required; there is no Node/npm path
 | `src/config.ts` | Config load/validation, `DEFAULT_GATES` | Add new gates here |
 | `src/parsers.ts` | Tool output to `Finding[]` | New parsers need fixture tests |
 | `src/runner.ts` | Pipeline execution, parallel cost groups, timeout, fail-fast, hint | Executor injected for testability |
-| `src/cache.ts` | Input-hash cache, caching executor | Only gates with `inputs` are cached |
+| `src/cache.ts` | Input-hash cache, caching executor | Only gates whose `inputs` resolve to files are cached |
+| `src/lock.ts` | One run per repo, atomic acquire and guarded steal | Staleness is decided by liveness or file age, never by content |
+| `src/runtime.ts` | Portability layer (fs, hash, stdin) | node builtins only, the one door for runtime bits |
+| `src/spawn.ts` | Spawn half of the portability layer | Bounded timeout, capped capture, re-exported by runtime.ts |
 | `src/changed.ts` | `{changed}` expansion from git status | |
 | `src/report.ts` | Human + JSON output, verdict validation | |
 | `src/commands.ts` | CLI commands | |
 | `src/initgen.ts` | Smart init stack detection | |
+| `src/inputs.ts` | Cache inputs derived from the tree | Output dirs and gitignored names stay out of the key |
 | `src/claude.ts` | Claude Code PreToolUse integration | claude-hook must never block non-git commands |
 | `src/hooks.ts` | Git hook installer | Never clobbers foreign hooks |
 | `action.yml` | Composite GitHub Action | Runs the CLI from the action checkout, zero install |

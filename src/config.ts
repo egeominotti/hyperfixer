@@ -1,5 +1,5 @@
 import { fileExists, readTextFile } from "./runtime.ts";
-import type { GateSpec, HyperfixerConfig } from "./types.ts";
+import type { GateSpec, HyperfixerConfig, ParserKind } from "./types.ts";
 
 export const CONFIG_FILE = "hyperfixer.config.json";
 
@@ -12,7 +12,10 @@ export const DEFAULT_GATES: GateSpec[] = [
   {
     name: "lint",
     cost: 5,
-    command: ["bunx", "biome", "check", "."],
+    // Scoped package name on purpose: bare "biome" on npm is an unrelated
+    // abandoned package that exits 0 without linting, so a project without a
+    // local install would get a lint gate that always passes.
+    command: ["bunx", "@biomejs/biome", "check", "."],
     parser: "raw",
     optional: true,
   },
@@ -43,7 +46,7 @@ export const DEFAULT_GATES: GateSpec[] = [
   {
     name: "mutation",
     cost: 100,
-    command: ["bunx", "stryker", "run", "--incremental"],
+    command: ["bunx", "@stryker-mutator/core", "run", "--incremental"],
     parser: "raw",
     optional: true,
     enabled: false,
@@ -54,8 +57,19 @@ export function defaultConfig(): HyperfixerConfig {
   return { gates: DEFAULT_GATES, failFast: true, outDir: ".hyperfixer" };
 }
 
-export async function loadConfig(path = CONFIG_FILE): Promise<HyperfixerConfig> {
-  if (!fileExists(path)) return defaultConfig();
+/**
+ * Load the config. When the caller named the path explicitly (--config), a
+ * missing file is a setup error: silently falling back to the built in gates
+ * would run a different pipeline than the one asked for and report it green.
+ */
+export async function loadConfig(
+  path = CONFIG_FILE,
+  explicit = false,
+): Promise<HyperfixerConfig> {
+  if (!fileExists(path)) {
+    if (explicit) throw new Error(`${path}: config file not found`);
+    return defaultConfig();
+  }
   let raw: unknown;
   try {
     raw = JSON.parse(readTextFile(path));
@@ -88,6 +102,25 @@ export function normalizeConfig(raw: unknown, source: string): HyperfixerConfig 
   };
 }
 
+const PARSER_KINDS = [
+  "tsc",
+  "bun-test",
+  "fast-check",
+  "eslint-json",
+  "findings-json",
+  "raw",
+] as const;
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((v) => typeof v === "string");
+}
+
+/**
+ * Every present field is validated and a bad one throws. Ignoring a malformed
+ * field would leave the gate without a command, and a gate without a command
+ * is skipped, so a typo in the config would quietly turn verification off and
+ * still report the run green.
+ */
 function normalizeGate(raw: unknown, source: string): GateSpec {
   if (typeof raw !== "object" || raw === null) {
     throw new Error(`${source}: gate must be an object`);
@@ -96,33 +129,42 @@ function normalizeGate(raw: unknown, source: string): GateSpec {
   if (typeof g.name !== "string" || g.name.length === 0) {
     throw new Error(`${source}: gate needs a non-empty "name"`);
   }
+  const where = `${source}: gate "${g.name}"`;
   if (typeof g.cost !== "number" || !Number.isFinite(g.cost)) {
-    throw new Error(`${source}: gate "${g.name}" needs a numeric "cost"`);
+    throw new Error(`${where} needs a numeric "cost"`);
   }
   const spec: GateSpec = { name: g.name, cost: g.cost };
-  if (Array.isArray(g.command) && g.command.every((c) => typeof c === "string")) {
-    spec.command = g.command;
+  for (const key of ["command", "fixCommand", "inputs"] as const) {
+    const value = g[key];
+    if (value === undefined) continue;
+    if (!isStringArray(value)) {
+      throw new Error(`${where}: "${key}" must be an array of strings`);
+    }
+    spec[key] = value;
   }
-  if (typeof g.optional === "boolean") spec.optional = g.optional;
-  if (typeof g.enabled === "boolean") spec.enabled = g.enabled;
-  if (
-    g.parser === "tsc" ||
-    g.parser === "bun-test" ||
-    g.parser === "fast-check" ||
-    g.parser === "eslint-json" ||
-    g.parser === "findings-json" ||
-    g.parser === "raw"
-  ) {
-    spec.parser = g.parser;
+  for (const key of ["optional", "enabled"] as const) {
+    const value = g[key];
+    if (value === undefined) continue;
+    if (typeof value !== "boolean")
+      throw new Error(`${where}: "${key}" must be a boolean`);
+    spec[key] = value;
   }
-  if (Array.isArray(g.fixCommand) && g.fixCommand.every((c) => typeof c === "string")) {
-    spec.fixCommand = g.fixCommand;
+  if (g.parser !== undefined) {
+    const kinds: readonly string[] = PARSER_KINDS;
+    if (typeof g.parser !== "string" || !kinds.includes(g.parser)) {
+      throw new Error(`${where}: "parser" must be one of ${PARSER_KINDS.join(", ")}`);
+    }
+    spec.parser = g.parser as ParserKind;
   }
-  if (typeof g.timeoutMs === "number" && g.timeoutMs > 0) {
+  if (g.timeoutMs !== undefined) {
+    if (
+      typeof g.timeoutMs !== "number" ||
+      !Number.isFinite(g.timeoutMs) ||
+      g.timeoutMs <= 0
+    ) {
+      throw new Error(`${where}: "timeoutMs" must be a positive number`);
+    }
     spec.timeoutMs = g.timeoutMs;
-  }
-  if (Array.isArray(g.inputs) && g.inputs.every((p) => typeof p === "string")) {
-    spec.inputs = g.inputs;
   }
   return spec;
 }

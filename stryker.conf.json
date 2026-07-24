@@ -2,9 +2,16 @@
   "$schema": "https://raw.githubusercontent.com/stryker-mutator/stryker-js/master/packages/core/schema/stryker-schema.json",
   "testRunner": "command",
   "commandRunner": {
-    "command": "bun test test/runner.test.ts test/parsers.test.ts test/cache.test.ts test/changed.test.ts test/property"
+    "command": "bun test test/runner.test.ts test/executor.test.ts test/parsers.test.ts test/cache.test.ts test/config.test.ts test/lock.test.ts test/changed.test.ts test/initgen.test.ts test/property"
   },
-  "mutate": ["src/parsers.ts", "src/changed.ts", "src/runner.ts"],
+  "mutate": [
+    "src/parsers.ts",
+    "src/changed.ts",
+    "src/runner.ts",
+    "src/cache.ts",
+    "src/config.ts",
+    "src/lock.ts"
+  ],
   "disableTypeChecks": true,
   "reporters": ["clear-text", "progress"],
   "concurrency": 4,

@@ -33,7 +33,6 @@ async function writeGates(dir: string, gates: unknown[]): Promise<void> {
     JSON.stringify({ failFast: true, outDir: ".hyperfixer", gates }),
   );
 }
-
 describe("e2e: install-claude", () => {
   test("creates settings, is idempotent, preserves existing keys", async () => {
     const dir = tempDir("hyperfixer-claude-");

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { buildHint, exitCodeFor, runPipeline, spawnExecutor } from "../src/runner.ts";
+import { buildHint, exitCodeFor, runPipeline } from "../src/runner.ts";
 import type { GateExecutor, GateSpec, GateStatus } from "../src/types.ts";
 
 function gate(name: string, cost: number, extra: Partial<GateSpec> = {}): GateSpec {
@@ -163,43 +163,5 @@ describe("buildHint", () => {
   test("null when nothing blocks", () => {
     expect(buildHint([result({ status: "pass", exitCode: 0 })])).toBeNull();
     expect(buildHint([])).toBeNull();
-  });
-});
-
-describe("spawnExecutor", () => {
-  test("passing command", async () => {
-    const r = await spawnExecutor(gate("ok", 1, { command: ["true"] }));
-    expect(r.status).toBe("pass");
-    expect(r.exitCode).toBe(0);
-  });
-
-  test("failing command", async () => {
-    const r = await spawnExecutor(gate("ko", 1, { command: ["false"] }));
-    expect(r.status).toBe("fail");
-    expect(r.exitCode).toBe(1);
-  });
-
-  test("missing command skips", async () => {
-    const r = await spawnExecutor(gate("none", 1));
-    expect(r.status).toBe("skip");
-  });
-
-  test("hanging command times out as error", async () => {
-    const r = await spawnExecutor(
-      gate("hang", 1, { command: ["sleep", "5"], timeoutMs: 80 }),
-    );
-    expect(r.status).toBe("error");
-    expect(r.note).toContain("timed out after 80ms");
-  });
-
-  test("nonexistent binary: error when required, skip when optional", async () => {
-    const required = await spawnExecutor(
-      gate("bin", 1, { command: ["definitely-not-a-binary-xyz"] }),
-    );
-    expect(required.status).toBe("error");
-    const optional = await spawnExecutor(
-      gate("bin", 1, { command: ["definitely-not-a-binary-xyz"], optional: true }),
-    );
-    expect(optional.status).toBe("skip");
   });
 });

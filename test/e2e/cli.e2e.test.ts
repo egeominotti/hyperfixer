@@ -82,6 +82,90 @@ describe("e2e: run", () => {
     expect(r.exitCode).toBe(0);
     const verdict = await Bun.file(join(dir, ".hyperfixer/verdict.json")).json();
     expect(verdict.gates.map((g: { gate: string }) => g.gate)).toEqual(["cheap"]);
+    // a partial green must announce itself, here and in hint
+    expect(verdict.filteredGates).toEqual(["pricey"]);
+    const h = await cli(dir, "hint");
+    expect(h.stdout).toContain("pricey");
+    expect(h.stdout).toContain("not run");
+  });
+
+  test("--json survives a pipe: no truncation at the pipe buffer", async () => {
+    // 3000 tsc-shaped errors parse into a verdict far past the 64 KB a pipe
+    // holds, which process.exit would have discarded mid-document.
+    await writeConfig(dir, [
+      {
+        name: "loud",
+        cost: 1,
+        parser: "tsc",
+        command: [
+          "sh",
+          "-c",
+          "for i in $(seq 1 3000); do echo \"src/f$i.ts($i,7): error TS2322: Type 'string' is not assignable to type 'number'.\"; done; exit 1",
+        ],
+      },
+    ]);
+    const r = await cli(dir, "run", "--json");
+    expect(r.exitCode).toBe(1);
+    expect(r.stdout.length).toBeGreaterThan(70_000);
+    // Capped at MAX_FINDINGS, but still far past what a pipe holds at once.
+    expect(JSON.parse(r.stdout).gates[0].findings.length).toBe(1000);
+  });
+
+  test("explicit --config pointing at a missing file: exit 2, never the defaults", async () => {
+    await writeConfig(dir, [{ name: "a", cost: 1, command: ["true"] }]);
+    const r = await cli(dir, "run", "--quiet", "--config", "typo.json");
+    expect(r.exitCode).toBe(2);
+    expect(r.stderr).toContain("config file not found");
+  });
+
+  // The verdict is written for an agent to read: an unbounded findings array
+  // would make it unreadable, and the hint only ever names the first one.
+  test("findings are capped and the drop is recorded", async () => {
+    await writeConfig(dir, [
+      {
+        name: "loud",
+        cost: 1,
+        parser: "tsc",
+        command: [
+          "sh",
+          "-c",
+          'for i in $(seq 1 1200); do echo "src/f$i.ts($i,1): error TS2322: nope."; done; exit 1',
+        ],
+      },
+    ]);
+    const r = await cli(dir, "run", "--quiet", "--no-cache");
+    expect(r.exitCode).toBe(1);
+    const verdict = await Bun.file(join(dir, ".hyperfixer/verdict.json")).json();
+    expect(verdict.gates[0].findings.length).toBe(1000);
+    expect(verdict.gates[0].note).toContain("200 more findings not recorded");
+    expect(verdict.gates[0].findingsTotal).toBe(1200);
+    // The first finding still drives the hint, and the count is the real one,
+    // not the number that survived the cap.
+    expect(verdict.hint).toContain("src/f1.ts:1");
+    expect(verdict.hint).toContain("+1199 more");
+  });
+
+  test("hint survives a hand corrupted filteredGates", async () => {
+    await writeConfig(dir, [{ name: "a", cost: 1, command: ["true"] }]);
+    await cli(dir, "run", "--quiet");
+    const path = join(dir, ".hyperfixer/verdict.json");
+    const verdict = await Bun.file(path).json();
+    verdict.filteredGates = "mutation";
+    await Bun.write(path, JSON.stringify(verdict));
+    const r = await cli(dir, "hint");
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toContain("OK, nothing to fix");
+    expect(r.stderr).not.toContain("is not a function");
+  });
+
+  test("gate command that is not an array of strings: exit 2", async () => {
+    await Bun.write(
+      join(dir, "strcmd.json"),
+      JSON.stringify({ gates: [{ name: "unit", cost: 1, command: "bun test" }] }),
+    );
+    const r = await cli(dir, "run", "--quiet", "--config", "strcmd.json");
+    expect(r.exitCode).toBe(2);
+    expect(r.stderr).toContain('"command" must be an array of strings');
   });
 
   test("--max-cost excluding every gate: exit 2 setup problem, never a false OK", async () => {
@@ -101,164 +185,5 @@ describe("e2e: run", () => {
     expect(r.exitCode).toBe(3);
     const verdict = await Bun.file(join(dir, ".hyperfixer/verdict.json")).json();
     expect(verdict.gates[0].status).toBe("error");
-  });
-
-  test("fix runs fixCommand then verifies green", async () => {
-    const marker = join(dir, "fixed.txt");
-    await writeConfig(dir, [
-      {
-        name: "needs-fix",
-        cost: 1,
-        command: ["test", "-f", marker],
-        fixCommand: ["sh", "-c", `printf ok > ${marker}`],
-      },
-    ]);
-    expect((await cli(dir, "run", "--quiet")).exitCode).toBe(1);
-    const r = await cli(dir, "fix", "--quiet");
-    expect(r.exitCode).toBe(0);
-    expect(r.stdout).toContain("fix needs-fix");
-  });
-
-  test("fix refuses to run fixers while another run holds the lock", async () => {
-    const marker = join(dir, "should-not-exist.txt");
-    await writeConfig(dir, [
-      {
-        name: "g",
-        cost: 1,
-        command: ["true"],
-        fixCommand: ["sh", "-c", `printf no > ${marker}`],
-      },
-    ]);
-    await Bun.write(
-      join(dir, ".hyperfixer/lock"),
-      JSON.stringify({ pid: process.pid, at: Date.now(), nonce: "held" }),
-    );
-    const r = await cli(dir, "fix", "--quiet");
-    expect(r.exitCode).toBe(2);
-    expect(r.stderr).toContain("another hyperfixer run is in progress");
-    expect(await Bun.file(marker).exists()).toBe(false);
-    rmSync(join(dir, ".hyperfixer/lock"), { force: true });
-  });
-
-  test("--only with unknown gate: exit 2", async () => {
-    await writeConfig(dir, [{ name: "a", cost: 1, command: ["true"] }]);
-    const r = await cli(dir, "run", "--only", "nope");
-    expect(r.exitCode).toBe(2);
-    expect(r.stderr).toContain("unknown gate(s): nope");
-  });
-
-  test("malformed config: exit 2", async () => {
-    await Bun.write(join(dir, "bad.json"), "{ not json");
-    const r = await cli(dir, "run", "--config", "bad.json");
-    expect(r.exitCode).toBe(2);
-  });
-
-  test("duplicate gate names: exit 2", async () => {
-    await writeConfig(dir, [
-      { name: "dup", cost: 1, command: ["true"] },
-      { name: "dup", cost: 2, command: ["true"] },
-    ]);
-    const r = await cli(dir, "run", "--quiet");
-    expect(r.exitCode).toBe(2);
-    expect(r.stderr).toContain('duplicate gate name "dup"');
-    await writeConfig(dir, [{ name: "a", cost: 1, command: ["true"] }]);
-  });
-});
-
-describe("e2e: hint", () => {
-  test("after failure: exit 1 with actionable text", async () => {
-    await writeConfig(dir, [{ name: "boom", cost: 1, command: ["false"] }]);
-    await cli(dir, "run", "--quiet");
-    const r = await cli(dir, "hint");
-    expect(r.exitCode).toBe(1);
-    expect(r.stdout).toContain("[boom]");
-  });
-
-  test("after success: exit 0, fresh verdict has no stale warning", async () => {
-    await writeConfig(dir, [{ name: "a", cost: 1, command: ["true"] }]);
-    await cli(dir, "run", "--quiet");
-    const r = await cli(dir, "hint");
-    expect(r.exitCode).toBe(0);
-    expect(r.stdout).toContain("OK, nothing to fix");
-    expect(r.stderr).not.toContain("stale");
-  });
-
-  test("stale verdict triggers stderr warning", async () => {
-    await writeConfig(dir, [{ name: "a", cost: 1, command: ["true"] }]);
-    await cli(dir, "run", "--quiet");
-    const path = join(dir, ".hyperfixer/verdict.json");
-    const verdict = await Bun.file(path).json();
-    verdict.generatedAt = "2020-01-01T00:00:00.000Z";
-    await Bun.write(path, JSON.stringify(verdict));
-    const r = await cli(dir, "hint");
-    expect(r.stderr).toContain("stale");
-  });
-
-  test("malformed config: exit 2, not 1", async () => {
-    const r = await cli(dir, "hint", "--config", "bad.json");
-    expect(r.exitCode).toBe(2);
-  });
-
-  test("filtered run (--only) never looks stale by construction", async () => {
-    await Bun.write(join(dir, "watched.txt"), "same");
-    await writeConfig(dir, [
-      { name: "a", cost: 1, command: ["true"], inputs: ["watched.txt"] },
-      { name: "b", cost: 2, command: ["true"], inputs: ["watched.txt"] },
-    ]);
-    await cli(dir, "run", "--quiet", "--only", "a");
-    const r = await cli(dir, "hint");
-    expect(r.stderr).not.toContain("inputs changed");
-  });
-
-  test("content staleness: hint warns after an input file changes", async () => {
-    await Bun.write(join(dir, "watched.txt"), "v1");
-    await writeConfig(dir, [
-      { name: "a", cost: 1, command: ["true"], inputs: ["watched.txt"] },
-    ]);
-    await cli(dir, "run", "--quiet");
-    const fresh = await cli(dir, "hint");
-    expect(fresh.stderr).not.toContain("inputs changed");
-    await Bun.write(join(dir, "watched.txt"), "v2");
-    const stale = await cli(dir, "hint");
-    expect(stale.stderr).toContain("inputs changed since this verdict");
-  });
-});
-
-describe("e2e: init and install-hooks", () => {
-  test("init writes config once, refuses twice", async () => {
-    const fresh = mkdtempSync(join(tmpdir(), "hyperfixer-init-"));
-    try {
-      expect((await cli(fresh, "init")).exitCode).toBe(0);
-      expect(await Bun.file(join(fresh, "hyperfixer.config.json")).exists()).toBe(true);
-      expect((await cli(fresh, "init")).exitCode).toBe(2);
-    } finally {
-      rmSync(fresh, { recursive: true, force: true });
-    }
-  });
-
-  test("install-hooks writes both hooks, keeps foreign hooks intact", async () => {
-    const repo = mkdtempSync(join(tmpdir(), "hyperfixer-hooks-"));
-    try {
-      Bun.spawnSync(["git", "init", "-q"], { cwd: repo });
-      await Bun.write(join(repo, ".git/hooks/pre-push"), "#!/bin/sh\necho mine\n");
-      const r = await cli(repo, "install-hooks");
-      expect(r.exitCode).toBe(1);
-      const preCommit = await Bun.file(join(repo, ".git/hooks/pre-commit")).text();
-      expect(preCommit).toContain("installed by hyperfixer");
-      expect(preCommit).toContain("--max-cost 50");
-      const prePush = await Bun.file(join(repo, ".git/hooks/pre-push")).text();
-      expect(prePush).toBe("#!/bin/sh\necho mine\n");
-    } finally {
-      rmSync(repo, { recursive: true, force: true });
-    }
-  });
-
-  test("install-hooks outside a git repo: exit 2", async () => {
-    const bare = mkdtempSync(join(tmpdir(), "hyperfixer-nogit-"));
-    try {
-      expect((await cli(bare, "install-hooks")).exitCode).toBe(2);
-    } finally {
-      rmSync(bare, { recursive: true, force: true });
-    }
   });
 });

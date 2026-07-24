@@ -77,5 +77,6 @@ export async function cmdInstallHooks(): Promise<number> {
   console.log(
     `${bold("done")}, commits run gates with cost <= 50, pushes run everything`,
   );
-  return partial ? 1 : 0;
+  // A foreign hook left in place is a setup problem, never a code failure.
+  return partial ? 2 : 0;
 }

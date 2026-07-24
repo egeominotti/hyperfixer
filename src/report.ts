@@ -21,8 +21,11 @@ function renderGate(r: GateResult): string[] {
       : "";
     lines.push(`    ${loc}${f.message}`);
   }
-  if (r.findings.length > MAX_FINDINGS_SHOWN) {
-    lines.push(dim(`    … +${r.findings.length - MAX_FINDINGS_SHOWN} more findings`));
+  // Count what the parser found, not what the verdict kept: the human report
+  // must not understate the problem any more than the hint does.
+  const total = r.findingsTotal ?? r.findings.length;
+  if (total > MAX_FINDINGS_SHOWN) {
+    lines.push(dim(`    … +${total - MAX_FINDINGS_SHOWN} more findings`));
   }
   return lines;
 }
@@ -30,9 +33,14 @@ function renderGate(r: GateResult): string[] {
 export function renderHuman(verdict: Verdict): string {
   const lines = verdict.gates.flatMap(renderGate);
   lines.push("");
+  const filtered = Array.isArray(verdict.filteredGates) ? verdict.filteredGates : [];
+  const scope = filtered.length === 0 ? "all gates" : "the gates that ran";
+  if (filtered.length > 0) {
+    lines.push(dim(`not run: ${filtered.join(", ")}`));
+  }
   lines.push(
     verdict.ok
-      ? green(bold(`OK`)) + dim(`, all gates passed in ${verdict.durationMs}ms`)
+      ? green(bold(`OK`)) + dim(`, ${scope} passed in ${verdict.durationMs}ms`)
       : red(bold(`FAIL`)) +
           (verdict.failedGate === null ? "" : ` at gate ${bold(verdict.failedGate)}`) +
           `, ${verdict.hint ?? "see findings"}`,

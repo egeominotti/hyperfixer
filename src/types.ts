@@ -15,6 +15,12 @@ export interface GateResult {
   durationMs: number;
   exitCode: number | null;
   findings: Finding[];
+  /**
+   * How many problems the parser actually found, present only when that is
+   * more than the verdict records. findings is capped so the file stays
+   * readable; this keeps the real count honest.
+   */
+  findingsTotal?: number;
   /** Raw tail of combined output, for context when findings parsing is incomplete. */
   outputTail: string;
   /** Why the gate was skipped or errored, when applicable. */
@@ -71,6 +77,13 @@ export interface Verdict {
   inputsFingerprint?: string;
   /** Name of the first gate that failed or errored, null when ok. */
   failedGate: string | null;
+  /**
+   * Gates the config would have run that this run did not: held back by
+   * --only, --max-cost, or --changed when nothing they watch changed. A non
+   * empty list means ok covers part of the pipeline only, so a green verdict
+   * is not proof the full pipeline passes.
+   */
+  filteredGates?: string[];
   gates: GateResult[];
   durationMs: number;
   /** One-line, agent-consumable summary of what to fix first. */

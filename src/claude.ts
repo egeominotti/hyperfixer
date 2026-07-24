@@ -1,5 +1,6 @@
 import { pipelineFingerprint } from "./cache.ts";
 import { green, red } from "./colors.ts";
+import type { RunFlags } from "./commands.ts";
 import { loadConfig } from "./config.ts";
 import { acquireLock } from "./lock.ts";
 import { writeVerdict } from "./report.ts";
@@ -20,7 +21,7 @@ const GIT_WRITE = /\bgit\s+(?:-\S+\s+(?:[^-]\S*\s+)?)*(commit|push)\b/;
  * tool call and the stderr hint is fed back to the agent. Anything that is
  * not a git write exits 0 and never blocks.
  */
-export async function cmdClaudeHook(configPath: string): Promise<number> {
+export async function cmdClaudeHook(flags: RunFlags): Promise<number> {
   let payload: unknown;
   try {
     payload = JSON.parse(await readStdin());
@@ -34,8 +35,9 @@ export async function cmdClaudeHook(configPath: string): Promise<number> {
 
   // Fail closed on internal errors, but with a message the agent can act on.
   try {
-    const config = await loadConfig(configPath);
-    const lock = acquireLock(config.outDir);
+    const config = await loadConfig(flags.configPath, flags.configExplicit);
+    const outDir = flags.outDir ?? config.outDir;
+    const lock = acquireLock(outDir);
     if (!lock.ok) {
       console.error("hyperfixer: another run is in progress, retry in a moment");
       return 2;
@@ -45,7 +47,7 @@ export async function cmdClaudeHook(configPath: string): Promise<number> {
       const fingerprint = pipelineFingerprint(config.gates);
       verdict = await runPipeline(config);
       if (fingerprint !== null) verdict.inputsFingerprint = fingerprint;
-      await writeVerdict(verdict, config.outDir);
+      await writeVerdict(verdict, outDir);
     } finally {
       lock.release();
     }

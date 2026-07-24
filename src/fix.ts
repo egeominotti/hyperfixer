@@ -17,7 +17,7 @@ const KILL_GRACE_MS = 5_000;
 export async function cmdFix(flags: RunFlags): Promise<number> {
   let config: Awaited<ReturnType<typeof loadConfig>>;
   try {
-    config = await loadConfig(flags.configPath);
+    config = await loadConfig(flags.configPath, flags.configExplicit);
   } catch (e) {
     console.error(red(e instanceof Error ? e.message : String(e)));
     return 2;
@@ -52,8 +52,15 @@ async function runFixers(
       (flags.only === null || flags.only.includes(g.name)) &&
       (flags.maxCost === null || g.cost <= flags.maxCost),
   );
+  // Fixer progress goes to stderr: stdout belongs to the verdict, and under
+  // --json a single human line ahead of it makes the whole document
+  // unparsable. stderr is a separate stream, so --json still gets diagnostics;
+  // only --quiet, which asks for no human output at all, silences them.
+  const progress = (line: string) => {
+    if (!flags.quiet) console.error(line);
+  };
   if (fixers.length === 0) {
-    console.log(dim("no gate declares a fixCommand, nothing to autofix"));
+    progress(dim("no gate declares a fixCommand, nothing to autofix"));
   }
   for (const gate of fixers) {
     const command = gate.fixCommand as string[];
@@ -63,14 +70,14 @@ async function runFixers(
         killGraceMs: KILL_GRACE_MS,
       });
       if (res.exitCode === 0) {
-        console.log(`${green("✓")} fix ${gate.name}`);
+        progress(`${green("✓")} fix ${gate.name}`);
       } else {
-        console.log(
+        progress(
           `${red("✗")} fix ${gate.name}${dim(`, exit ${res.exitCode}${res.timedOut ? ", timed out" : ""}`)}`,
         );
       }
     } catch (e) {
-      console.log(
+      progress(
         `${red("✗")} fix ${gate.name}${dim(`, ${e instanceof Error ? e.message : String(e)}`)}`,
       );
     }

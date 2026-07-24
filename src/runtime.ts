@@ -1,101 +1,50 @@
 /**
  * Portability layer: everything runtime-specific lives here, implemented on
- * node: builtins so the same code runs on Node >= 20, Bun and Deno 2.
+ * node: builtins so the same code runs on Node >= 20, Bun and Deno 2. Process
+ * spawning lives in spawn.ts and is re-exported, so this stays the one door.
  */
-import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  linkSync,
+  mkdirSync,
+  readFileSync,
+  statSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname } from "node:path";
-import { StringDecoder } from "node:string_decoder";
 
-export interface SpawnCapture {
-  exitCode: number | null;
-  stdout: string;
-  stderr: string;
-  timedOut: boolean;
-}
-
-/** Spawn argv (no shell), capture output, SIGTERM at timeout then SIGKILL. */
-export function spawnCapture(
-  command: string[],
-  opts: { timeoutMs: number; killGraceMs: number },
-): Promise<SpawnCapture> {
-  return new Promise((resolve, reject) => {
-    const [cmd, ...args] = command;
-    if (cmd === undefined) {
-      reject(new Error("empty command"));
-      return;
-    }
-    // detached puts the gate in its own process group on POSIX, so the
-    // timeout can kill the whole tree, grandchildren included.
-    const child = spawn(cmd, args, {
-      stdio: ["ignore", "pipe", "pipe"],
-      detached: process.platform !== "win32",
-    });
-    const killTree = (signal: NodeJS.Signals) => {
-      const pid = child.pid;
-      if (pid !== undefined && process.platform !== "win32") {
-        try {
-          process.kill(-pid, signal);
-          return;
-        } catch {}
-      }
-      child.kill(signal);
-    };
-    let timedOut = false;
-    let killTimer: ReturnType<typeof setTimeout> | undefined;
-    const timer = setTimeout(() => {
-      if (child.exitCode !== null) return;
-      timedOut = true;
-      killTree("SIGTERM");
-      killTimer = setTimeout(() => killTree("SIGKILL"), opts.killGraceMs);
-    }, opts.timeoutMs);
-    // StringDecoder: a multi-byte character split across pipe chunks must
-    // not decode to replacement chars in findings the agent will act on.
-    const outDec = new StringDecoder("utf8");
-    const errDec = new StringDecoder("utf8");
-    let stdout = "";
-    let stderr = "";
-    child.stdout?.on("data", (d: Buffer) => {
-      stdout += outDec.write(d);
-    });
-    child.stderr?.on("data", (d: Buffer) => {
-      stderr += errDec.write(d);
-    });
-    child.on("error", (e) => {
-      clearTimeout(timer);
-      clearTimeout(killTimer);
-      reject(e);
-    });
-    child.on("close", (exitCode) => {
-      clearTimeout(timer);
-      clearTimeout(killTimer);
-      stdout += outDec.end();
-      stderr += errDec.end();
-      resolve({ exitCode, stdout, stderr, timedOut });
-    });
-  });
-}
-
-/** Synchronous spawn for quick checks (git status, tool --version). */
-export function spawnSyncCapture(
-  command: string[],
-  cwd?: string,
-): { exitCode: number | null; stdout: string } {
-  const [cmd, ...args] = command;
-  if (cmd === undefined) return { exitCode: null, stdout: "" };
-  const res = spawnSync(cmd, args, {
-    cwd,
-    encoding: "utf8",
-    stdio: ["ignore", "pipe", "ignore"],
-    maxBuffer: 64 * 1024 * 1024,
-  });
-  if (res.error) return { exitCode: null, stdout: "" };
-  return { exitCode: res.status, stdout: res.stdout ?? "" };
-}
+export type { SpawnCapture } from "./spawn.ts";
+export { spawnCapture, spawnSyncCapture } from "./spawn.ts";
 
 export function fileExists(path: string): boolean {
   return existsSync(path);
+}
+
+/**
+ * Age of a file by mtime, Infinity when it is gone. Used to judge leftovers
+ * whose content says nothing about their owner: only age can tell a leftover
+ * from a file some live run is about to use.
+ */
+export function fileAgeMs(path: string): number {
+  try {
+    return Date.now() - statSync(path).mtimeMs;
+  } catch {
+    return Number.POSITIVE_INFINITY;
+  }
+}
+
+/**
+ * Write to stdout and resolve only once the bytes reached the OS. console.log
+ * to a pipe is buffered: returning before the flush lets the process exit with
+ * a large verdict truncated at the pipe buffer, which is the machine-readable
+ * interface silently producing invalid JSON.
+ */
+export function writeStdout(text: string): Promise<void> {
+  return new Promise((resolve) => {
+    process.stdout.write(text, () => resolve());
+  });
 }
 
 export function readTextFile(path: string): string {
@@ -126,15 +75,44 @@ export async function readStdin(): Promise<string> {
   return Buffer.concat(chunks).toString("utf8");
 }
 
-/** Create the file only if absent. True when created, false when it exists. */
+/** Filesystems without hard links (FAT, some network mounts) report these. */
+const NO_LINK_SUPPORT = new Set(["ENOTSUP", "EOPNOTSUPP", "EPERM", "ENOSYS"]);
+
+/**
+ * Publish content at path only if absent. True when we created it.
+ *
+ * Write to a sibling then hard link it into place, rather than an exclusive
+ * open followed by a write: link fails when the path exists, and the file is
+ * never observable in a half written state, so a reader cannot mistake a live
+ * writer's empty file for a corrupt leftover. Where the filesystem has no hard
+ * links, fall back to the exclusive open: it is weaker, briefly observable as
+ * empty, which is exactly why leftovers are judged by age and not by content.
+ */
 export function writeTextFileExclusive(path: string, content: string): boolean {
-  const dir = dirname(path);
-  if (dir !== "" && dir !== ".") mkdirSync(dir, { recursive: true });
+  return publishExclusive(path, content, linkSync);
+}
+
+/** The body of writeTextFileExclusive, with the linker injected for tests. */
+export function publishExclusive(
+  path: string,
+  content: string,
+  link: (from: string, to: string) => void,
+): boolean {
+  const tmp = `${path}.${process.pid}.${Math.random().toString(36).slice(2)}.tmp`;
   try {
-    writeFileSync(path, content, { flag: "wx" });
+    writeTextFile(tmp, content);
+    link(tmp, path);
     return true;
-  } catch {
-    return false;
+  } catch (e) {
+    if (!NO_LINK_SUPPORT.has(String((e as { code?: string }).code))) return false;
+    try {
+      writeFileSync(path, content, { flag: "wx" });
+      return true;
+    } catch {
+      return false;
+    }
+  } finally {
+    deleteFile(tmp);
   }
 }
 
