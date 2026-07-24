@@ -100,8 +100,10 @@ export function buildHint(results: GateResult[]): string | null {
 export function exitCodeFor(verdict: Verdict): 0 | 1 | 2 | 3 {
   if (verdict.ok) return 0;
   if (!verdict.gates.some((r) => r.status !== "skip")) return 2;
-  const blocking = verdict.gates.find((r) => r.status === "fail" || r.status === "error");
-  return blocking?.status === "error" ? 3 : 1;
+  // A real code failure always dominates an infra error: never hide a fix
+  // the agent must make behind "do not edit code".
+  if (verdict.gates.some((r) => r.status === "fail")) return 1;
+  return 3;
 }
 
 export async function runPipeline(

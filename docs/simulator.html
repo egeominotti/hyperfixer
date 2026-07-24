@@ -4,33 +4,63 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Simulator · hyperfixer</title>
-<meta name="description" content="Interactive hyperfixer pipeline simulator: run gates, inject bugs, watch fail-fast and the machine-readable verdict.">
+<meta name="description" content="Interactive hyperfixer pipeline simulator: inject bugs, autofix, watch fail-fast, cache hits and the exit-code contract live.">
 <link rel="canonical" href="https://egeominotti.github.io/hyperfixer/simulator.html">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="hyperfixer">
 <meta property="og:title" content="Simulator · hyperfixer">
-<meta property="og:description" content="Interactive hyperfixer pipeline simulator: run gates, inject bugs, watch fail-fast and the machine-readable verdict.">
+<meta property="og:description" content="Interactive hyperfixer pipeline simulator: inject bugs, autofix, watch fail-fast, cache hits and the exit-code contract live.">
 <meta property="og:url" content="https://egeominotti.github.io/hyperfixer/simulator.html">
 <meta property="og:image" content="https://egeominotti.github.io/hyperfixer/assets/og.png">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="stylesheet" href="style.css">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛡️</text></svg>">
 <style>
-  .controls { display: flex; flex-wrap: wrap; gap: 12px 24px; margin: 18px 0; align-items: center; }
-  .controls label { display: flex; align-items: center; gap: 8px; cursor: pointer; color: var(--ink-soft); font-size: 14px; }
-  .controls input[type="checkbox"] { accent-color: var(--stamp); width: 16px; height: 16px; }
-  .controls input[type="range"] { accent-color: var(--stamp); width: 140px; }
+  .controls {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 10px 24px;
+    margin: 18px 0;
+    border: 1px dashed rgba(159, 195, 232, 0.5);
+    padding: 16px 18px;
+  }
+  .controls .head {
+    grid-column: 1 / -1;
+    font-size: 12px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+  }
+  .controls label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    color: var(--ink-soft);
+    font-size: 14px;
+    min-height: 28px;
+  }
+  .controls input[type="checkbox"] { accent-color: var(--stamp); width: 17px; height: 17px; flex: none; }
+  .controls input[type="range"] { accent-color: var(--stamp); flex: 1; min-width: 90px; }
+  .actions { display: flex; flex-wrap: wrap; gap: 12px; margin: 4px 0 18px; }
   button {
     font-family: var(--mono); font-size: 15px; font-weight: 700; letter-spacing: 2px;
-    background: var(--stamp); color: #fff; border: none; padding: 12px 28px; cursor: pointer;
+    border: none; padding: 12px 30px; cursor: pointer; min-height: 44px;
   }
-  button:hover, button:focus-visible { filter: brightness(1.1); outline: 2px solid var(--ink); }
+  #run { background: var(--stamp); color: #fff; }
+  #fix { background: transparent; color: var(--ink); border: 2px solid var(--line); }
+  button:hover, button:focus-visible { filter: brightness(1.15); outline: 2px solid var(--ink); outline-offset: 2px; }
   button:disabled { opacity: 0.5; cursor: wait; }
-  #term { min-height: 220px; }
+  #term { min-height: 230px; }
   .exit0 { color: var(--pass); font-weight: 700; }
   .exit1 { color: var(--stamp); font-weight: 700; }
+  .exit3 { color: #ffd166; font-weight: 700; }
   details { margin: 14px 0; }
   summary { cursor: pointer; color: var(--ink-dim); font-size: 13px; letter-spacing: 2px; text-transform: uppercase; }
+  @media (max-width: 720px) {
+    .actions button { flex: 1; }
+    .controls { grid-template-columns: 1fr; }
+  }
 </style>
 </head>
 <body>
@@ -41,21 +71,30 @@
   <a href="guide.html">Guide</a>
   <a href="cli.html">CLI</a>
   <a href="config.html">Config</a>
+  <a href="recipes.html">Recipes</a>
   <a href="agents.html">Agents</a>
   <a href="simulator.html" aria-current="page">Simulator</a>
   <a href="https://github.com/egeominotti/hyperfixer">GitHub</a>
+  <a href="https://www.npmjs.com/package/hyperfixer">npm</a>
 </nav>
 
 <p class="eyebrow">Interactive · Sheet 05</p>
 <h1>SIMULATOR</h1>
-<p>This is exactly how hyperfixer behaves on a real project: gates run in cost order, equal costs in parallel, fail-fast blocks later groups, cached gates return instantly, and the verdict tells the agent what to fix. Inject a bug and run.</p>
+<p>This is how hyperfixer behaves on a real project: gates run in cost order, fail-fast blocks later groups, cached gates return instantly, autofix clears the fixable noise, and every outcome maps to one exit code. Inject problems and run.</p>
 
-<div class="controls">
-  <label><input type="checkbox" id="bug-type"> inject type error</label>
-  <label><input type="checkbox" id="bug-test"> inject failing test</label>
+<div class="controls" role="group" aria-label="Simulation controls">
+  <span class="head">Inject problems</span>
+  <label><input type="checkbox" id="bug-lint"> lint error, autofixable</label>
+  <label><input type="checkbox" id="bug-type"> type error</label>
+  <label><input type="checkbox" id="bug-test"> failing test</label>
+  <label><input type="checkbox" id="bug-hang"> hanging gate, timeout</label>
+  <span class="head">Pipeline options</span>
   <label><input type="checkbox" id="cache" checked> warm cache</label>
-  <label>max-cost <input type="range" id="maxcost" min="0" max="100" value="100" step="5"> <span id="maxcost-v">100</span></label>
+  <label>max-cost <input type="range" id="maxcost" min="0" max="100" value="100" step="5" aria-label="max cost"> <span id="maxcost-v">100</span></label>
+</div>
+<div class="actions">
   <button id="run">RUN</button>
+  <button id="fix" title="hyperfixer fix: run declared fixCommands, then verify">FIX</button>
 </div>
 
 <pre id="term" aria-live="polite"><span class="dim">$ hyperfixer run</span></pre>
@@ -65,6 +104,8 @@
   <pre id="verdict" class="dim">run the pipeline first</pre>
 </details>
 
+<p class="dim">FIX simulates <code>hyperfixer fix</code>: fixCommands (eslint --fix, biome --write) clear the autofixable lint error, then the pipeline verifies. The hanging gate shows the infrastructure path: status <code>error</code>, exit 3, the agent must not edit code for it.</p>
+
 <footer>
   <span>HYPERFIXER · MIT · <a href="llms.txt">llms.txt</a> · <a href="llms-full.txt">llms-full.txt</a></span>
   <span><a href="https://github.com/egeominotti/hyperfixer">github.com/egeominotti/hyperfixer</a></span>
@@ -73,14 +114,15 @@
 
 <script>
 const GATES = [
-  { name: "lint", cost: 5, ms: 70 },
+  { name: "lint", cost: 5, ms: 70, failsOn: "bug-lint",
+    finding: "[lint] src/legacy.ts:1, Unexpected var, use let or const instead. (no-var)" },
   { name: "typecheck", cost: 10, ms: 500, failsOn: "bug-type",
     finding: "[typecheck] src/service.ts:42, Type 'string' is not assignable to type 'number'." },
   { name: "typetest", cost: 20, ms: 18 },
   { name: "unit", cost: 30, ms: 110, failsOn: "bug-test",
     finding: "[unit] test/service.test.ts:12, test failed: service > computes totals" },
   { name: "pbt", cost: 40, ms: 40 },
-  { name: "e2e", cost: 60, ms: 800 },
+  { name: "e2e", cost: 60, ms: 800, hangsOn: "bug-hang", timeoutMs: 800 },
 ];
 const $ = (id) => document.getElementById(id);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -88,50 +130,84 @@ const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 $("maxcost").addEventListener("input", () => { $("maxcost-v").textContent = $("maxcost").value; });
 
-$("run").addEventListener("click", async () => {
-  $("run").disabled = true;
-  try {
+async function pipeline(term) {
   const cache = $("cache").checked;
   const maxCost = Number($("maxcost").value);
-  const term = $("term");
-  term.innerHTML = '<span class="dim">$ hyperfixer run' + (maxCost < 100 ? " --max-cost " + maxCost : "") + "</span>\n";
   const active = GATES.filter((g) => g.cost <= maxCost);
   const results = [];
   let blocked = false;
   const start = performance.now();
   for (const g of active) {
-    if (blocked) { results.push({ gate: g.name, status: "skip", durationMs: 0, note: "earlier gate failed" });
-      term.innerHTML += '<span class="dim">- ' + g.name + ", earlier gate failed</span>\n"; continue; }
+    if (blocked) {
+      results.push({ gate: g.name, status: "skip", durationMs: 0, note: "earlier gate failed" });
+      term.innerHTML += '<span class="dim">- ' + g.name + ", earlier gate failed</span>\n";
+      continue;
+    }
     const fails = g.failsOn && $(g.failsOn).checked;
-    const hit = cache && !fails;
+    const hangs = g.hangsOn && $(g.hangsOn).checked;
+    const hit = cache && !fails && !hangs;
     if (!reduced) await sleep(hit ? 40 : Math.min(g.ms, 600));
     const ms = hit ? 0 : g.ms;
-    if (fails) {
-      results.push({ gate: g.name, status: "fail", durationMs: ms, findings: [{ message: g.finding }] });
+    if (hangs) {
+      results.push({ gate: g.name, status: "error", durationMs: g.timeoutMs, exitCode: null, note: "timed out after " + g.timeoutMs + "ms" });
+      term.innerHTML += '<span class="exit3">!</span> <strong>' + g.name + '</strong> <span class="dim">(' + g.timeoutMs + "ms), timed out after " + g.timeoutMs + "ms</span>\n";
+      blocked = true;
+    } else if (fails) {
+      results.push({ gate: g.name, status: "fail", durationMs: ms, exitCode: 1, findings: [{ message: g.finding }] });
       term.innerHTML += '<span class="fail">✗</span> <strong>' + g.name + '</strong> <span class="dim">(' + ms + "ms)</span>\n    " + g.finding + "\n";
       blocked = true;
     } else {
-      results.push({ gate: g.name, status: "pass", durationMs: ms, cached: hit || undefined });
+      results.push({ gate: g.name, status: "pass", durationMs: ms, exitCode: 0, cached: hit || undefined });
       term.innerHTML += '<span class="pass">✓</span> ' + g.name + ' <span class="dim">(' + ms + "ms)" + (hit ? ", cache hit" : "") + "</span>\n";
     }
   }
-  const failed = results.find((r) => r.status === "fail");
+  const blocking = results.find((r) => r.status === "fail" || r.status === "error");
   const executed = results.some((r) => r.status !== "skip");
-  const ok = !failed && executed;
-  const hint = failed ? failed.findings[0].message
+  const ok = !blocking && executed;
+  const hint = blocking
+    ? (blocking.findings ? blocking.findings[0].message : "[" + blocking.gate + "] " + blocking.note)
     : executed ? null : "[pipeline] no gates executed, check gates config and --max-cost";
+  const exit = ok ? 0 : !executed ? 2 : blocking.status === "error" ? 3 : 1;
   const total = Math.round(performance.now() - start);
-  term.innerHTML += ok
-    ? '\n<span class="exit0">OK</span><span class="dim">, all gates passed in ' + total + "ms</span>\n<span class=\"dim\">exit 0</span>"
-    : '\n<span class="exit1">FAIL</span>' + (failed ? " at gate <strong>" + failed.gate + "</strong>" : "") + ", " + hint + '\n<span class="dim">' + (failed ? "exit 1, agent reads the hint, fixes, re-runs" : "exit 2, empty pipeline is a setup problem") + "</span>";
+  const closing = {
+    0: '\n<span class="exit0">OK</span><span class="dim">, all gates passed in ' + total + 'ms</span>\n<span class="dim">exit 0, verified, safe to commit</span>',
+    1: '\n<span class="exit1">FAIL</span> at gate <strong>' + (blocking ? blocking.gate : "") + "</strong>, " + hint + '\n<span class="dim">exit 1, the CODE is wrong, agent reads the hint, fixes, re-runs</span>',
+    2: '\n<span class="exit1">FAIL</span>, ' + hint + '\n<span class="dim">exit 2, the SETUP is wrong, fix config, not code</span>',
+    3: '\n<span class="exit3">ERROR</span> at gate <strong>' + (blocking ? blocking.gate : "") + "</strong>, " + hint + '\n<span class="exit3">exit 3</span><span class="dim">, INFRASTRUCTURE failed, do NOT edit code, check the gate</span>',
+  };
+  term.innerHTML += closing[exit];
   $("verdict").textContent = JSON.stringify(
-    { ok, generatedAt: new Date().toISOString(), failedGate: failed ? failed.gate : null, hint, durationMs: total, gates: results },
+    { ok, generatedAt: new Date().toISOString(), inputsFingerprint: "3f9c…demo",
+      failedGate: blocking ? blocking.gate : null, hint, durationMs: total, gates: results },
     null, 2);
   $("verdict").classList.remove("dim");
-  } finally {
-    $("run").disabled = false;
+}
+
+async function withButtons(fn) {
+  $("run").disabled = true;
+  $("fix").disabled = true;
+  try { await fn(); } finally { $("run").disabled = false; $("fix").disabled = false; }
+}
+
+$("run").addEventListener("click", () => withButtons(async () => {
+  const term = $("term");
+  const maxCost = Number($("maxcost").value);
+  term.innerHTML = '<span class="dim">$ hyperfixer run' + (maxCost < 100 ? " --max-cost " + maxCost : "") + "</span>\n";
+  await pipeline(term);
+}));
+
+$("fix").addEventListener("click", () => withButtons(async () => {
+  const term = $("term");
+  term.innerHTML = '<span class="dim">$ hyperfixer fix</span>\n';
+  if ($("bug-lint").checked) {
+    if (!reduced) await sleep(180);
+    $("bug-lint").checked = false;
+    term.innerHTML += '<span class="pass">✓</span> fix lint <span class="dim">(eslint --fix rewrote src/legacy.ts)</span>\n';
+  } else {
+    term.innerHTML += '<span class="dim">no gate declares pending autofixes</span>\n';
   }
-});
+  await pipeline(term);
+}));
 </script>
 </body>
 </html>

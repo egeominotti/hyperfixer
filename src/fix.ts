@@ -1,6 +1,7 @@
 import { dim, green, red } from "./colors.ts";
 import { cmdRun, type RunFlags } from "./commands.ts";
 import { loadConfig } from "./config.ts";
+import { acquireLock } from "./lock.ts";
 import { spawnCapture } from "./runtime.ts";
 
 const FIX_TIMEOUT_MS = 600_000;
@@ -14,15 +15,42 @@ const KILL_GRACE_MS = 5_000;
  * afterwards is the arbiter.
  */
 export async function cmdFix(flags: RunFlags): Promise<number> {
-  let gates: Awaited<ReturnType<typeof loadConfig>>["gates"];
+  let config: Awaited<ReturnType<typeof loadConfig>>;
   try {
-    gates = (await loadConfig(flags.configPath)).gates;
+    config = await loadConfig(flags.configPath);
   } catch (e) {
     console.error(red(e instanceof Error ? e.message : String(e)));
     return 2;
   }
+  // Fixers mutate the tree: hold the same lock as run for the whole
+  // fix-then-verify sequence, so no concurrent run reads a half-fixed tree.
+  const lock = acquireLock(flags.outDir ?? config.outDir);
+  if (!lock.ok) {
+    console.error(
+      red(
+        `another hyperfixer run is in progress${lock.holderPid !== null ? ` (pid ${lock.holderPid})` : ""}, retry when it finishes`,
+      ),
+    );
+    return 2;
+  }
+  try {
+    return await runFixers(config.gates, flags);
+  } finally {
+    lock.release();
+  }
+}
+
+async function runFixers(
+  gates: Awaited<ReturnType<typeof loadConfig>>["gates"],
+  flags: RunFlags,
+): Promise<number> {
   const fixers = gates.filter(
-    (g) => g.enabled !== false && g.fixCommand !== undefined && g.fixCommand.length > 0,
+    (g) =>
+      g.enabled !== false &&
+      g.fixCommand !== undefined &&
+      g.fixCommand.length > 0 &&
+      (flags.only === null || flags.only.includes(g.name)) &&
+      (flags.maxCost === null || g.cost <= flags.maxCost),
   );
   if (fixers.length === 0) {
     console.log(dim("no gate declares a fixCommand, nothing to autofix"));
@@ -47,5 +75,5 @@ export async function cmdFix(flags: RunFlags): Promise<number> {
       );
     }
   }
-  return cmdRun(flags);
+  return cmdRun(flags, { skipLock: true });
 }

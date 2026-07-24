@@ -27,6 +27,7 @@
   <a href="guide.html">Guide</a>
   <a href="cli.html">CLI</a>
   <a href="config.html">Config</a>
+  <a href="recipes.html">Recipes</a>
   <a href="agents.html" aria-current="page">Agents</a>
   <a href="simulator.html">Simulator</a>
   <a href="https://github.com/egeominotti/hyperfixer">GitHub</a>
@@ -39,9 +40,9 @@
 
 <h2>The universal loop</h2>
 <p>Put this in your agent's instructions file, <code>AGENTS.md</code> or <code>CLAUDE.md</code>:</p>
-<pre>hyperfixer run --quiet || hyperfixer hint
+<pre>hyperfixer fix --quiet || hyperfixer hint
 <span class="dim"># => [typecheck] src/service.ts:42, Type 'string' is not assignable… (+3 more)</span>
-<span class="dim"># fix, then re-run until exit 0</span></pre>
+<span class="dim"># autofix runs first, then: exit 1 fix code, exit 2 fix setup, exit 3 do not touch code</span></pre>
 
 <h2>Git hooks, every agent and every human</h2>
 <pre>hyperfixer install-hooks

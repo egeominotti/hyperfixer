@@ -29,7 +29,7 @@ hyperfixer orders gates by cost, stops at the first failure, and tells the agent
 
 ## The agent loop
 
-    hyperfixer run --quiet || hyperfixer hint
+    hyperfixer fix --quiet || hyperfixer hint
     # => [typecheck] src/service.ts:42, Type 'string' is not assignable to type 'number'. (+3 more)
     # fix, then re-run until exit 0
 
@@ -126,7 +126,7 @@ Field notes: `status` is one of pass | fail | skip | error. Cached results carry
 
 Universal loop, put in AGENTS.md or CLAUDE.md:
 
-    hyperfixer run --quiet || hyperfixer hint
+    hyperfixer fix --quiet || hyperfixer hint
     # fix, repeat until exit 0
 
 Git hooks (hard enforcement, every agent and human):

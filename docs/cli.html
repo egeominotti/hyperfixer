@@ -27,6 +27,7 @@
   <a href="guide.html">Guide</a>
   <a href="cli.html" aria-current="page">CLI</a>
   <a href="config.html">Config</a>
+  <a href="recipes.html">Recipes</a>
   <a href="agents.html">Agents</a>
   <a href="simulator.html">Simulator</a>
   <a href="https://github.com/egeominotti/hyperfixer">GitHub</a>
@@ -39,7 +40,7 @@
 <h2>Commands</h2>
 <table>
   <tr><th>Command</th><th>What it does</th></tr>
-  <tr><td><code>hyperfixer run [flags]</code></td><td>Run gates in cost order, write verdict, exit 0/1</td></tr>
+  <tr><td><code>hyperfixer run [flags]</code></td><td>Run gates in cost order, write the verdict, exit by the contract below</td></tr>
   <tr><td><code>hyperfixer fix [flags]</code></td><td>Run every gate's <code>fixCommand</code> (biome --write, eslint --fix), then verify with the normal pipeline</td></tr>
   <tr><td><code>hyperfixer init</code></td><td>Detect the stack (Biome or ESLint, tsconfig, Bun or vitest or npm test) and write a tailored <code>hyperfixer.config.json</code></td></tr>
   <tr><td><code>hyperfixer hint</code></td><td>Print the first actionable fix from the last verdict, warns on stderr when the verdict is older than 10 minutes</td></tr>

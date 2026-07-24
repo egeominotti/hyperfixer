@@ -1,12 +1,32 @@
 import type { Finding } from "./types.ts";
 
 /**
- * Extract the first balanced JSON value ([ or {) from mixed tool output,
- * tolerant of banners before and warnings after the JSON itself.
+ * Extract up to `limit` balanced JSON candidates from mixed tool output.
+ * Noise like "Debugger listening [pid 123]" before the real JSON produces a
+ * bogus first candidate: parsers try each candidate until one has findings.
  */
+export function extractJsonCandidates(output: string, limit = 8): unknown[] {
+  const candidates: unknown[] = [];
+  let cursor = 0;
+  while (candidates.length < limit) {
+    const rest = output.slice(cursor);
+    const rel = rest.search(/[[{]/);
+    if (rel === -1) break;
+    const { value, end } = extractBalanced(rest, rel);
+    if (value !== null) candidates.push(value);
+    cursor += end;
+  }
+  return candidates;
+}
+
+/** Extract the first balanced JSON value ([ or {) from mixed tool output. */
 export function extractJson(output: string): unknown {
   const start = output.search(/[[{]/);
   if (start === -1) return null;
+  return extractBalanced(output, start).value;
+}
+
+function extractBalanced(output: string, start: number): { value: unknown; end: number } {
   const open = output[start];
   const close = open === "[" ? "]" : "}";
   let depth = 0;
@@ -26,14 +46,14 @@ export function extractJson(output: string): unknown {
       depth--;
       if (depth === 0) {
         try {
-          return JSON.parse(output.slice(start, i + 1));
+          return { value: JSON.parse(output.slice(start, i + 1)), end: i + 1 };
         } catch {
-          return null;
+          return { value: null, end: i + 1 };
         }
       }
     }
   }
-  return null;
+  return { value: null, end: start + 1 };
 }
 
 interface EslintMessage {
@@ -46,7 +66,14 @@ interface EslintMessage {
 
 /** ESLint --format json: [{ filePath, messages: [...] }] */
 export function parseEslintJson(output: string): Finding[] {
-  const data = extractJson(output);
+  for (const candidate of extractJsonCandidates(output)) {
+    const findings = eslintFindings(candidate);
+    if (findings.length > 0) return findings;
+  }
+  return [];
+}
+
+function eslintFindings(data: unknown): Finding[] {
   if (!Array.isArray(data)) return [];
   const findings: Finding[] = [];
   const push = (filePath: string, m: EslintMessage) => {
@@ -78,7 +105,14 @@ export function parseEslintJson(output: string): Finding[] {
  * dedicated parser.
  */
 export function parseFindingsJson(output: string): Finding[] {
-  const data = extractJson(output);
+  for (const candidate of extractJsonCandidates(output)) {
+    const findings = shapedFindings(candidate);
+    if (findings.length > 0) return findings;
+  }
+  return [];
+}
+
+function shapedFindings(data: unknown): Finding[] {
   const list = Array.isArray(data)
     ? data
     : typeof data === "object" &&

@@ -1,3 +1,4 @@
+import { pipelineFingerprint } from "./cache.ts";
 import { green, red } from "./colors.ts";
 import { loadConfig } from "./config.ts";
 import { acquireLock } from "./lock.ts";
@@ -41,7 +42,9 @@ export async function cmdClaudeHook(configPath: string): Promise<number> {
     }
     let verdict: Awaited<ReturnType<typeof runPipeline>>;
     try {
+      const fingerprint = pipelineFingerprint(config.gates);
       verdict = await runPipeline(config);
+      if (fingerprint !== null) verdict.inputsFingerprint = fingerprint;
       await writeVerdict(verdict, config.outDir);
     } finally {
       lock.release();

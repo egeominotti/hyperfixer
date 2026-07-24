@@ -18,6 +18,26 @@ describe("extractJson", () => {
   });
 });
 
+describe("extractJson noise resilience", () => {
+  test("findings survive bracketed noise before the real JSON", () => {
+    const real = JSON.stringify([
+      {
+        filePath: "/r/a.ts",
+        messages: [{ severity: 2, message: "boom", ruleId: "x", line: 1 }],
+      },
+    ]);
+    for (const noisy of [
+      `Debugger listening [pid 123]\n${real}`,
+      `note: use {}\n${real}`,
+      `[1,2,3]\n${real}`,
+    ]) {
+      const findings = parseEslintJson(noisy);
+      expect(findings).toHaveLength(1);
+      expect(findings[0]?.message).toBe("boom (x)");
+    }
+  });
+});
+
 describe("parseEslintJson", () => {
   const output = JSON.stringify([
     {

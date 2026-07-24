@@ -23,7 +23,10 @@ export interface RunFlags {
   changed: boolean;
 }
 
-export async function cmdRun(flags: RunFlags): Promise<number> {
+export async function cmdRun(
+  flags: RunFlags,
+  opts: { skipLock?: boolean } = {},
+): Promise<number> {
   let config: HyperfixerConfig;
   try {
     config = await loadConfig(flags.configPath);
@@ -65,8 +68,8 @@ export async function cmdRun(flags: RunFlags): Promise<number> {
     config.gates = applyChanged(config.gates, files);
   }
 
-  const lock = acquireLock(config.outDir);
-  if (!lock.ok) {
+  const lock = opts.skipLock ? null : acquireLock(config.outDir);
+  if (lock !== null && !lock.ok) {
     console.error(
       red(
         `another hyperfixer run is in progress${lock.holderPid !== null ? ` (pid ${lock.holderPid})` : ""}, wait for it or delete ${config.outDir}/lock if stale`,
@@ -90,7 +93,7 @@ export async function cmdRun(flags: RunFlags): Promise<number> {
     }
     return exitCodeFor(verdict);
   } finally {
-    lock.release();
+    if (lock?.ok) lock.release();
   }
 }
 

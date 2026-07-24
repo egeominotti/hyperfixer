@@ -42,6 +42,7 @@
   <a href="guide.html">Guide</a>
   <a href="cli.html">CLI</a>
   <a href="config.html">Config</a>
+  <a href="recipes.html">Recipes</a>
   <a href="agents.html">Agents</a>
   <a href="simulator.html">Simulator</a>
   <a href="https://github.com/egeominotti/hyperfixer">GitHub</a>
@@ -87,9 +88,9 @@ bunx hyperfixer install-hooks  <span class="dim"># enforce on git commit and pus
   <span class="label">Note, agent loop</span>
   run → verdict.json → hint → fix → repeat, until exit 0
 </div>
-<pre>hyperfixer run --quiet || hyperfixer hint
+<pre>hyperfixer fix --quiet || hyperfixer hint
 <span class="dim">=> [typecheck] src/service.ts:42, Type 'string' is not assignable to type 'number'. (+3 more)</span></pre>
-<p>Exit codes are a strict contract: <code>0</code> all gates pass, <code>1</code> a gate failed, <code>2</code> usage or config error. Agents branch on the exit code alone, and <code>hint</code> gives them the exact file and line to fix first.</p>
+<p>Exit codes are a strict contract: <code>0</code> verified, <code>1</code> the code is wrong, <code>2</code> the setup is wrong, <code>3</code> gate infrastructure failed (do not edit code). Agents branch on the exit code alone, <code>fix</code> clears the autofixable noise, and <code>hint</code> gives the exact file and line to fix first.</p>
 
 <h2>Fast in practice</h2>
 <p>Gates with equal cost run <strong>in parallel</strong>. Gates that declare <code>inputs</code> are <strong>cached by input hash</strong>: an unchanged project re-verifies in milliseconds.</p>

@@ -104,6 +104,17 @@ describe("exitCodeFor", () => {
     expect(exitCodeFor(await verdictWith({}, ["a"]))).toBe(0);
     expect(exitCodeFor(await verdictWith({ a: "fail" }, ["a", "b"]))).toBe(1);
     expect(exitCodeFor(await verdictWith({ a: "error" }, ["a", "b"]))).toBe(3);
+    // A code failure always dominates an infra error, whatever the order.
+    const mixed = {
+      ...baseConfig,
+      gates: [gate("e", 1), gate("f", 1)],
+    };
+    expect(
+      exitCodeFor(await runPipeline(mixed, fakeExec({ e: "error", f: "fail" }))),
+    ).toBe(1);
+    expect(
+      exitCodeFor(await runPipeline(mixed, fakeExec({ e: "fail", f: "error" }))),
+    ).toBe(1);
     // pass then error later: first blocking is the error
     expect(exitCodeFor(await verdictWith({ b: "error" }, ["a", "b"]))).toBe(3);
     // empty pipeline is a setup problem

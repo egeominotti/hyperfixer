@@ -119,6 +119,27 @@ describe("e2e: run", () => {
     expect(r.stdout).toContain("fix needs-fix");
   });
 
+  test("fix refuses to run fixers while another run holds the lock", async () => {
+    const marker = join(dir, "should-not-exist.txt");
+    await writeConfig(dir, [
+      {
+        name: "g",
+        cost: 1,
+        command: ["true"],
+        fixCommand: ["sh", "-c", `printf no > ${marker}`],
+      },
+    ]);
+    await Bun.write(
+      join(dir, ".hyperfixer/lock"),
+      JSON.stringify({ pid: process.pid, at: Date.now(), nonce: "held" }),
+    );
+    const r = await cli(dir, "fix", "--quiet");
+    expect(r.exitCode).toBe(2);
+    expect(r.stderr).toContain("another hyperfixer run is in progress");
+    expect(await Bun.file(marker).exists()).toBe(false);
+    rmSync(join(dir, ".hyperfixer/lock"), { force: true });
+  });
+
   test("--only with unknown gate: exit 2", async () => {
     await writeConfig(dir, [{ name: "a", cost: 1, command: ["true"] }]);
     const r = await cli(dir, "run", "--only", "nope");

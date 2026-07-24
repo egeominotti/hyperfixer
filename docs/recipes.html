@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Recipes · hyperfixer</title>
+<meta name="description" content="Copy-paste hyperfixer setups: Bun with Biome, Node with ESLint and vitest, Python through the findings-json protocol, CI profiles.">
+<link rel="canonical" href="https://egeominotti.github.io/hyperfixer/recipes.html">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="hyperfixer">
+<meta property="og:title" content="Recipes · hyperfixer">
+<meta property="og:description" content="Copy-paste hyperfixer setups: Bun with Biome, Node with ESLint and vitest, Python through the findings-json protocol, CI profiles.">
+<meta property="og:url" content="https://egeominotti.github.io/hyperfixer/recipes.html">
+<meta property="og:image" content="https://egeominotti.github.io/hyperfixer/assets/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="stylesheet" href="style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛡️</text></svg>">
+</head>
+<body>
+<div class="frame">
+<nav>
+  <a class="brand" href="index.html">HYPERFIXER</a>
+  <a href="index.html">Home</a>
+  <a href="guide.html">Guide</a>
+  <a href="cli.html">CLI</a>
+  <a href="config.html">Config</a>
+  <a href="recipes.html" aria-current="page">Recipes</a>
+  <a href="agents.html">Agents</a>
+  <a href="simulator.html">Simulator</a>
+  <a href="https://github.com/egeominotti/hyperfixer">GitHub</a>
+  <a href="https://www.npmjs.com/package/hyperfixer">npm</a>
+</nav>
+
+<p class="eyebrow">Cookbook · Sheet 07</p>
+<h1>RECIPES</h1>
+<p>Copy-paste setups for real stacks. In every case <code>hyperfixer init</code> gets you 90% of the way; these show the finished config with caching, autofix and the right parsers.</p>
+
+<h2>Bun + Biome + bun test</h2>
+<pre>{
+  "failFast": true,
+  "outDir": ".hyperfixer",
+  "gates": [
+    { "name": "lint", "cost": 5, "command": ["bunx", "biome", "check", "."],
+      "fixCommand": ["bunx", "biome", "check", "--write", "."],
+      "inputs": ["src/**", "test/**", "biome.json"] },
+    { "name": "typecheck", "cost": 10,
+      "command": ["bunx", "tsc", "--noEmit", "--pretty", "false"], "parser": "tsc",
+      "inputs": ["src/**", "test/**", "tsconfig.json"] },
+    { "name": "unit", "cost": 30, "command": ["bun", "test"], "parser": "bun-test",
+      "inputs": ["src/**", "test/**"] }
+  ]
+}</pre>
+
+<h2>Node + ESLint + vitest</h2>
+<p>ESLint runs with <code>--format json</code> so every finding reaches the agent with file and line; <code>fix</code> clears the autofixable part first.</p>
+<pre>{
+  "gates": [
+    { "name": "lint", "cost": 5,
+      "command": ["npx", "eslint", ".", "--format", "json"], "parser": "eslint-json",
+      "fixCommand": ["npx", "eslint", ".", "--fix"],
+      "inputs": ["src/**", "test/**", "eslint.config.js"] },
+    { "name": "typecheck", "cost": 10,
+      "command": ["npx", "tsc", "--noEmit", "--pretty", "false"], "parser": "tsc",
+      "inputs": ["src/**", "test/**", "tsconfig.json"] },
+    { "name": "unit", "cost": 30, "command": ["npx", "vitest", "run"],
+      "inputs": ["src/**", "test/**"] }
+  ]
+}</pre>
+
+<h2>Any language via findings-json</h2>
+<p>The generic protocol: a gate whose command prints a JSON array of findings integrates with full hints, whatever the toolchain. A pytest wrapper in ten lines:</p>
+<pre># scripts/pytest-findings.py
+import json, subprocess, sys
+r = subprocess.run(["pytest", "--tb=line", "-q"], capture_output=True, text=True)
+findings = []
+for line in r.stdout.splitlines():
+    if ".py:" in line and (" error" in line.lower() or "assert" in line.lower()):
+        path, _, rest = line.partition(":")
+        num, _, msg = rest.partition(":")
+        findings.append({"file": path.strip(), "line": int(num) if num.strip().isdigit() else 0, "message": msg.strip()})
+print(json.dumps(findings))
+sys.exit(r.returncode)</pre>
+<pre>{ "name": "pytest", "cost": 30,
+  "command": ["python3", "scripts/pytest-findings.py"], "parser": "findings-json",
+  "inputs": ["src/**", "tests/**"] }</pre>
+<p>The wrapper's exit code decides pass or fail, the JSON decides what the hint says. Same pattern works for cargo, go test, or any linter.</p>
+
+<h2>Differential oracle (parity gate)</h2>
+<p>When you keep a naive reference implementation next to the optimized one, a parity gate with the <code>fast-check</code> parser finds divergences and puts the minimal counterexample plus the replay seed straight into the verdict:</p>
+<pre>{ "name": "parity", "cost": 50, "command": ["bun", "scripts/parity.ts"],
+  "parser": "fast-check", "inputs": ["src/**", "scripts/**"] }</pre>
+
+<h2>Commit and push profiles</h2>
+<p>Give expensive gates (mutation, e2e) a cost above 50: <code>install-hooks</code> wires pre-commit to <code>--max-cost 50</code> (fast) and pre-push to the full pipeline. In CI, the GitHub Action runs everything:</p>
+<pre>- uses: actions/checkout@v4
+- uses: egeominotti/hyperfixer@main</pre>
+
+<h2>Linter and the verdict directory</h2>
+<p>Scope your linter to source folders (Biome <code>files.includes</code>, ESLint <code>ignores</code>): otherwise it lints <code>.hyperfixer/verdict.json</code> and the pipeline argues with its own output.</p>
+
+<footer>
+  <span>HYPERFIXER · MIT · <a href="llms.txt">llms.txt</a> · <a href="llms-full.txt">llms-full.txt</a></span>
+  <span><a href="https://github.com/egeominotti/hyperfixer">github.com/egeominotti/hyperfixer</a></span>
+</footer>
+</div>
+</body>
+</html>

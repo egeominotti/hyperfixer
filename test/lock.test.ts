@@ -40,6 +40,25 @@ describe("acquireLock", () => {
     }
   });
 
+  test("release after our lock was stolen never deletes the new holder's lock", () => {
+    const dir = mkdtempSync(join(tmpdir(), "hyperfixer-lockown-"));
+    try {
+      const ours = acquireLock(dir);
+      expect(ours.ok).toBe(true);
+      // A foreign run replaces our lock (as after a steal).
+      writeTextFile(
+        join(dir, "lock"),
+        JSON.stringify({ pid: process.pid, at: Date.now(), nonce: "foreign" }),
+      );
+      if (ours.ok) ours.release();
+      // The foreign lock must survive our release: acquire must still fail.
+      const contender = acquireLock(dir);
+      expect(contender.ok).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   test("corrupt lock file is stolen", () => {
     const dir = mkdtempSync(join(tmpdir(), "hyperfixer-lockbad-"));
     try {

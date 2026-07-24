@@ -151,7 +151,7 @@ hyperfixer is agent-agnostic by construction: the interface is a CLI with strict
 **The universal loop** (put this in your agent's instructions file, `AGENTS.md` or `CLAUDE.md`):
 
 ```bash
-hyperfixer run --quiet || hyperfixer hint
+hyperfixer fix --quiet || hyperfixer hint
 # => [typecheck] src/service.ts:42, Type 'string' is not assignable to type 'number'. (+3 more)
 # fix, then re-run until exit 0
 ```
