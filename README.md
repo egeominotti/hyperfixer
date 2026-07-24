@@ -4,7 +4,12 @@
 
 # hyperfixer
 
+[![npm](https://img.shields.io/npm/v/hyperfixer?color=cb3837&logo=npm)](https://www.npmjs.com/package/hyperfixer)
 [![CI](https://github.com/egeominotti/hyperfixer/actions/workflows/ci.yml/badge.svg)](https://github.com/egeominotti/hyperfixer/actions/workflows/ci.yml)
+[![docs](https://img.shields.io/badge/docs-egeominotti.github.io%2Fhyperfixer-14395F)](https://egeominotti.github.io/hyperfixer/)
+[![license](https://img.shields.io/npm/l/hyperfixer)](LICENSE)
+
+📦 [npm package](https://www.npmjs.com/package/hyperfixer) · 📖 [Documentation](https://egeominotti.github.io/hyperfixer/)
 
 **Layered verification pipeline for AI-agent-written code.**
 

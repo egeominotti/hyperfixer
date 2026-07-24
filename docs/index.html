@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>hyperfixer, verification pipeline for AI-agent code</title>
+<meta name="description" content="Layered verification pipeline for AI-agent-written code. Cost-ordered gates, fail-fast, machine-readable verdicts for self-correction loops.">
+<link rel="stylesheet" href="style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛡️</text></svg>">
+</head>
+<body>
+<div class="frame">
+<nav>
+  <a class="brand" href="index.html">HYPERFIXER</a>
+  <a href="index.html" aria-current="page">Home</a>
+  <a href="cli.html">CLI</a>
+  <a href="config.html">Config</a>
+  <a href="agents.html">Agents</a>
+  <a href="https://github.com/egeominotti/hyperfixer">GitHub</a>
+  <a href="https://www.npmjs.com/package/hyperfixer">npm</a>
+</nav>
+
+<p class="eyebrow">Verification pipeline · Sheet 01</p>
+<h1>HYPERFIXER</h1>
+<p><strong>Make AI agents prove their code works.</strong> hyperfixer runs your project's quality gates in cost order, cheapest first, fail-fast, and produces a machine-readable verdict that any coding agent consumes to fix its own mistakes.</p>
+
+<pre><span class="pass">✓</span> lint <span class="dim">(67ms)</span>
+<span class="pass">✓</span> typecheck <span class="dim">(552ms)</span>
+<span class="pass">✓</span> typetest <span class="dim">(17ms)</span>
+<span class="pass">✓</span> unit <span class="dim">(120ms)</span>
+<span class="pass">✓</span> pbt <span class="dim">(38ms)</span>
+<span class="pass">✓</span> e2e <span class="dim">(814ms)</span>
+
+<span class="pass">OK</span><span class="dim">, all gates passed in 1612ms</span></pre>
+
+<div class="stamp">OK · ALL GATES PASSED</div>
+
+<h2>Why layers</h2>
+<p>Agent-written code fails in layers, and each layer needs a different detector. Running everything on every change is wasteful; running only unit tests misses whole failure classes.</p>
+<table>
+  <tr><th>Layer</th><th>Catches</th><th>Tool</th></tr>
+  <tr><td>Lint</td><td>Style drift, suspicious patterns</td><td>Biome</td></tr>
+  <tr><td>Typecheck</td><td>Type errors</td><td>tsc, strict</td></tr>
+  <tr><td>Type tests</td><td>Wrong public API types</td><td>expect-type</td></tr>
+  <tr><td>Unit tests</td><td>Broken behavior</td><td>bun test</td></tr>
+  <tr><td>Property-based</td><td>Edge cases nobody thought to write</td><td>fast-check</td></tr>
+  <tr><td>Mutation</td><td>Tests that pass but assert nothing</td><td>Stryker, opt-in</td></tr>
+</table>
+
+<h2>Quick start</h2>
+<pre>bun add -d hyperfixer          <span class="dim"># requires Bun >= 1.1</span>
+bunx hyperfixer init           <span class="dim"># detects your stack, writes hyperfixer.config.json</span>
+bunx hyperfixer doctor         <span class="dim"># verify toolchain</span>
+bunx hyperfixer run            <span class="dim"># run the pipeline</span>
+bunx hyperfixer install-hooks  <span class="dim"># enforce on git commit and push</span></pre>
+
+<h2>The agent loop</h2>
+<div class="note">
+  <span class="label">Note, agent loop</span>
+  run → verdict.json → hint → fix → repeat, until exit 0
+</div>
+<pre>hyperfixer run --quiet || hyperfixer hint
+<span class="dim">=> [typecheck] src/service.ts:42, Type 'string' is not assignable to type 'number'. (+3 more)</span></pre>
+<p>Exit codes are a strict contract: <code>0</code> all gates pass, <code>1</code> a gate failed, <code>2</code> usage or config error. Agents branch on the exit code alone, and <code>hint</code> gives them the exact file and line to fix first.</p>
+
+<h2>Fast in practice</h2>
+<p>Gates with equal cost run <strong>in parallel</strong>. Gates that declare <code>inputs</code> are <strong>cached by input hash</strong>: an unchanged project re-verifies in milliseconds.</p>
+<pre><span class="pass">✓</span> lint <span class="dim">(0ms), cache hit</span>
+<span class="pass">✓</span> typecheck <span class="dim">(0ms), cache hit</span>
+<span class="pass">✓</span> e2e <span class="dim">(0ms), cache hit</span>
+
+<span class="pass">OK</span><span class="dim">, all gates passed in 2ms</span></pre>
+
+<footer>
+  <span>HYPERFIXER · MIT</span>
+  <span><a href="https://github.com/egeominotti/hyperfixer">github.com/egeominotti/hyperfixer</a></span>
+</footer>
+</div>
+</body>
+</html>

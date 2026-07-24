@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CLI · hyperfixer</title>
+<meta name="description" content="hyperfixer CLI reference: commands, flags, exit codes.">
+<link rel="stylesheet" href="style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛡️</text></svg>">
+</head>
+<body>
+<div class="frame">
+<nav>
+  <a class="brand" href="index.html">HYPERFIXER</a>
+  <a href="index.html">Home</a>
+  <a href="cli.html" aria-current="page">CLI</a>
+  <a href="config.html">Config</a>
+  <a href="agents.html">Agents</a>
+  <a href="https://github.com/egeominotti/hyperfixer">GitHub</a>
+  <a href="https://www.npmjs.com/package/hyperfixer">npm</a>
+</nav>
+
+<p class="eyebrow">Reference · Sheet 02</p>
+<h1>CLI</h1>
+
+<h2>Commands</h2>
+<table>
+  <tr><th>Command</th><th>What it does</th></tr>
+  <tr><td><code>hyperfixer run [flags]</code></td><td>Run gates in cost order, write verdict, exit 0/1</td></tr>
+  <tr><td><code>hyperfixer init</code></td><td>Detect the stack (Biome or ESLint, tsconfig, Bun or vitest or npm test) and write a tailored <code>hyperfixer.config.json</code></td></tr>
+  <tr><td><code>hyperfixer hint</code></td><td>Print the first actionable fix from the last verdict, warns on stderr when the verdict is older than 10 minutes</td></tr>
+  <tr><td><code>hyperfixer doctor</code></td><td>Check toolchain and config health</td></tr>
+  <tr><td><code>hyperfixer install-hooks</code></td><td>Install git pre-commit (cost &lt;= 50) and pre-push (full pipeline) hooks, never clobbers foreign hooks</td></tr>
+  <tr><td><code>hyperfixer install-claude</code></td><td>Install the Claude Code PreToolUse hook into <code>.claude/settings.json</code></td></tr>
+  <tr><td><code>hyperfixer claude-hook</code></td><td>Internal, PreToolUse entry point reading the hook payload from stdin</td></tr>
+</table>
+
+<h2>Run flags</h2>
+<table>
+  <tr><th>Flag</th><th>Effect</th></tr>
+  <tr><td><code>--json</code></td><td>Machine-readable verdict on stdout</td></tr>
+  <tr><td><code>--quiet</code></td><td>No human output, verdict.json still written</td></tr>
+  <tr><td><code>--config &lt;path&gt;</code></td><td>Config file, default <code>hyperfixer.config.json</code></td></tr>
+  <tr><td><code>--only &lt;a,b&gt;</code></td><td>Run only the named gates</td></tr>
+  <tr><td><code>--max-cost &lt;n&gt;</code></td><td>Run only gates with cost &lt;= n</td></tr>
+  <tr><td><code>--changed</code></td><td>Expand <code>{changed}</code> in commands to git-changed files</td></tr>
+  <tr><td><code>--no-cache</code></td><td>Ignore and do not update the input-hash cache</td></tr>
+  <tr><td><code>--no-fail-fast</code></td><td>Run all gates even after a failure</td></tr>
+  <tr><td><code>--out-dir &lt;dir&gt;</code></td><td>Verdict output directory, default <code>.hyperfixer</code></td></tr>
+</table>
+
+<h2>Exit codes</h2>
+<table>
+  <tr><th>Code</th><th>Meaning</th></tr>
+  <tr><td><code>0</code></td><td>All gates pass</td></tr>
+  <tr><td><code>1</code></td><td>A gate failed, or zero gates executed (an empty pipeline never masquerades as green)</td></tr>
+  <tr><td><code>2</code></td><td>Usage or config error</td></tr>
+</table>
+<p>The contract is strict by design: a broken config is exit 2, never exit 1, so an agent reading exit codes never mistakes a setup problem for a code problem.</p>
+
+<h2>Robustness</h2>
+<ul>
+  <li>A hanging gate is killed at <code>timeoutMs</code> (SIGTERM, then SIGKILL after 5s) and reported as <code>error</code></li>
+  <li>Duplicate gate names are rejected at config load</li>
+  <li>Zero gates executed, for example a too-low <code>--max-cost</code>, is a failure with hint <code>[pipeline] no gates executed</code></li>
+</ul>
+
+<footer>
+  <span>HYPERFIXER · MIT</span>
+  <span><a href="https://github.com/egeominotti/hyperfixer">github.com/egeominotti/hyperfixer</a></span>
+</footer>
+</div>
+</body>
+</html>

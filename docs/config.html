@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Config · hyperfixer</title>
+<meta name="description" content="hyperfixer configuration reference: gates, caching, changed mode, the verdict schema.">
+<link rel="stylesheet" href="style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛡️</text></svg>">
+</head>
+<body>
+<div class="frame">
+<nav>
+  <a class="brand" href="index.html">HYPERFIXER</a>
+  <a href="index.html">Home</a>
+  <a href="cli.html">CLI</a>
+  <a href="config.html" aria-current="page">Config</a>
+  <a href="agents.html">Agents</a>
+  <a href="https://github.com/egeominotti/hyperfixer">GitHub</a>
+  <a href="https://www.npmjs.com/package/hyperfixer">npm</a>
+</nav>
+
+<p class="eyebrow">Reference · Sheet 03</p>
+<h1>CONFIG</h1>
+
+<h2>hyperfixer.config.json</h2>
+<pre>{
+  "failFast": true,
+  "outDir": ".hyperfixer",
+  "gates": [
+    { "name": "lint",      "cost": 5,  "command": ["bunx", "biome", "check", "."],
+      "inputs": ["src/**", "test/**", "biome.json"] },
+    { "name": "typecheck", "cost": 10, "command": ["bunx", "tsc", "--noEmit", "--pretty", "false"],
+      "parser": "tsc", "inputs": ["src/**", "test/**", "tsconfig.json"] },
+    { "name": "unit",      "cost": 30, "command": ["bun", "test"], "parser": "bun-test" },
+    { "name": "mutation",  "cost": 100, "command": ["bunx", "stryker", "run", "--incremental"],
+      "enabled": false, "optional": true }
+  ]
+}</pre>
+
+<h2>Gate fields</h2>
+<table>
+  <tr><th>Field</th><th>Meaning</th></tr>
+  <tr><td><code>cost</code></td><td>Relative cost; gates run in ascending order, equal costs run concurrently as a group, <code>--max-cost</code> filters on it</td></tr>
+  <tr><td><code>command</code></td><td>Argv array, no shell; omit to skip the gate</td></tr>
+  <tr><td><code>parser</code></td><td><code>tsc</code>, <code>bun-test</code>, or <code>raw</code>, extracts structured findings from output</td></tr>
+  <tr><td><code>optional</code></td><td>Skip (instead of error) when the command cannot start</td></tr>
+  <tr><td><code>enabled</code></td><td><code>false</code> removes the gate from the pipeline</td></tr>
+  <tr><td><code>timeoutMs</code></td><td>Kill the gate after this many ms, default 600000</td></tr>
+  <tr><td><code>inputs</code></td><td>Glob patterns the gate depends on, declaring them enables caching</td></tr>
+</table>
+
+<h2>Caching</h2>
+<p>A gate that declares <code>inputs</code> stores its passing result keyed by a hash of command + file metadata (path, size, mtime). Unchanged inputs mean an instant cache hit. Failures are never cached, and gates without <code>inputs</code> always run. <code>--no-cache</code> bypasses everything.</p>
+
+<h2>Changed-only mode</h2>
+<p>Put <code>{changed}</code> in a gate command and run with <code>--changed</code>: the token expands to the files git reports as modified (staged, unstaged and untracked, NUL-safe for spaces and unicode), and the gate is disabled when the tree is clean.</p>
+<pre>{ "name": "lint-changed", "cost": 5, "command": ["bunx", "eslint", "{changed}"] }</pre>
+
+<h2>The verdict</h2>
+<pre>{
+  "ok": false,
+  "generatedAt": "2026-07-24T10:30:00.000Z",
+  "failedGate": "typecheck",
+  "hint": "[typecheck] src/service.ts:42, Type 'string' is not assignable…",
+  "durationMs": 533,
+  "gates": [
+    {
+      "gate": "typecheck",
+      "status": "fail",
+      "durationMs": 458,
+      "exitCode": 2,
+      "findings": [
+        { "file": "src/service.ts", "line": 42, "column": 5,
+          "code": "TS2322", "message": "…" }
+      ],
+      "outputTail": "…"
+    }
+  ]
+}</pre>
+<p>Written to <code>.hyperfixer/verdict.json</code> on every run. <code>status</code> is one of <code>pass</code>, <code>fail</code>, <code>skip</code>, <code>error</code>; cached results carry <code>"cached": true</code>. <code>generatedAt</code> guards against stale reads, <code>hint</code> is the one line an agent should act on first.</p>
+
+<footer>
+  <span>HYPERFIXER · MIT</span>
+  <span><a href="https://github.com/egeominotti/hyperfixer">github.com/egeominotti/hyperfixer</a></span>
+</footer>
+</div>
+</body>
+</html>

@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agents · hyperfixer</title>
+<meta name="description" content="Integrate hyperfixer with any AI coding agent: git hooks, Claude Code, GitHub Actions.">
+<link rel="stylesheet" href="style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛡️</text></svg>">
+</head>
+<body>
+<div class="frame">
+<nav>
+  <a class="brand" href="index.html">HYPERFIXER</a>
+  <a href="index.html">Home</a>
+  <a href="cli.html">CLI</a>
+  <a href="config.html">Config</a>
+  <a href="agents.html" aria-current="page">Agents</a>
+  <a href="https://github.com/egeominotti/hyperfixer">GitHub</a>
+  <a href="https://www.npmjs.com/package/hyperfixer">npm</a>
+</nav>
+
+<p class="eyebrow">Integrations · Sheet 04</p>
+<h1>AGENTS</h1>
+<p>hyperfixer is agent-agnostic by construction: the interface is a CLI with strict exit codes, a JSON verdict on disk, and git hooks. <strong>Claude Code, Codex, Cursor, Kimi, Grok</strong>, or a plain shell script all consume it the same way.</p>
+
+<h2>The universal loop</h2>
+<p>Put this in your agent's instructions file, <code>AGENTS.md</code> or <code>CLAUDE.md</code>:</p>
+<pre>hyperfixer run --quiet || hyperfixer hint
+<span class="dim"># => [typecheck] src/service.ts:42, Type 'string' is not assignable… (+3 more)</span>
+<span class="dim"># fix, then re-run until exit 0</span></pre>
+
+<h2>Git hooks, every agent and every human</h2>
+<pre>hyperfixer install-hooks
+<span class="dim"># pre-commit: gates with cost &lt;= 50 (fast)</span>
+<span class="dim"># pre-push:   full pipeline</span></pre>
+<p>The hooks are plain <code>sh</code>, refuse to overwrite hooks they did not write, and print the hint on failure so the blocked agent knows what to fix. This is the enforcement layer no agent can forget or skip.</p>
+
+<h2>Claude Code</h2>
+<pre>hyperfixer install-claude</pre>
+<p>Writes (or merges into) <code>.claude/settings.json</code> a PreToolUse hook that intercepts plain <code>git commit</code> and <code>git push</code> from the agent, runs the pipeline, and on failure blocks the call with the hint fed back to the agent, which fixes and retries. Non-git commands are never touched; garbage input never blocks. Best effort: aliases and wrappers are not intercepted, pair it with the git hooks for hard enforcement.</p>
+
+<h2>GitHub Actions</h2>
+<pre>- uses: actions/checkout@v4
+- uses: egeominotti/hyperfixer@main
+  with:
+    max-cost: "50"          <span class="dim"># optional</span>
+    config: "hyperfixer.config.json"   <span class="dim"># optional</span>
+    working-directory: "."             <span class="dim"># optional</span></pre>
+<p>The composite action installs Bun and runs the CLI directly from the action checkout, zero install steps.</p>
+
+<h2>Recommended layering</h2>
+<table>
+  <tr><th>Layer</th><th>Mechanism</th><th>Strength</th></tr>
+  <tr><td>Agent instructions</td><td>AGENTS.md / CLAUDE.md loop</td><td>Soft, agent can forget</td></tr>
+  <tr><td>Agent runtime</td><td><code>install-claude</code> PreToolUse hook</td><td>Blocking, best effort on command matching</td></tr>
+  <tr><td>Repository</td><td><code>install-hooks</code> git hooks</td><td>Hard, blocks everyone locally</td></tr>
+  <tr><td>CI</td><td>GitHub Action</td><td>Hard, blocks merges</td></tr>
+</table>
+<p>Use all four: the cheap layers give the agent fast feedback, the hard layers guarantee nothing unverified lands.</p>
+
+<div class="stamp">VERIFIED · SHIP IT</div>
+
+<footer>
+  <span>HYPERFIXER · MIT</span>
+  <span><a href="https://github.com/egeominotti/hyperfixer">github.com/egeominotti/hyperfixer</a></span>
+</footer>
+</div>
+</body>
+</html>
