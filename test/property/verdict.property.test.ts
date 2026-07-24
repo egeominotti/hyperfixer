@@ -44,7 +44,8 @@ describe("verdict invariants", () => {
         const blocking = verdict.gates.filter(
           (r) => r.status === "fail" || r.status === "error",
         );
-        expect(verdict.ok).toBe(blocking.length === 0);
+        const executed = verdict.gates.some((r) => r.status !== "skip");
+        expect(verdict.ok).toBe(blocking.length === 0 && executed);
         expect(verdict.failedGate).toBe(blocking[0]?.gate ?? null);
         // Every configured gate appears exactly once in the verdict.
         expect(verdict.gates.map((r) => r.gate).sort()).toEqual(

@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Verify (hyperfixer run)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - run: bun run check
+
+  release:
+    name: Bump patch version and changelog
+    needs: verify
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: release
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Bump version, update changelog, tag and push
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          NEW=$(npm version patch --no-git-tag-version)
+          VERSION="${NEW#v}"
+          DATE=$(date -u +%Y-%m-%d)
+          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || git rev-list --max-parents=0 HEAD)
+          NOTES=$(git log "${LAST_TAG}..HEAD" --no-merges --pretty='- %s' | grep -v 'chore: release' || true)
+          [ -n "$NOTES" ] || NOTES="- maintenance"
+
+          # NOTES via ENVIRON: awk -v is not newline-safe for multi-line values
+          NOTES="$NOTES" awk -v ver="$VERSION" -v date="$DATE" '
+            /^## \[Unreleased\]/ {
+              print; print ""; print "## [" ver "] - " date; print ""; print ENVIRON["NOTES"]; next
+            }
+            { print }
+          ' CHANGELOG.md > CHANGELOG.tmp && mv CHANGELOG.tmp CHANGELOG.md
+
+          git add package.json CHANGELOG.md
+          git commit -m "chore: release ${NEW} [skip ci]"
+          git tag "$NEW"
+          git push origin main --follow-tags

@@ -12,7 +12,7 @@ const MAX_FINDINGS_SHOWN = 10;
 
 function renderGate(r: GateResult): string[] {
   const time = r.status === "skip" ? "" : dim(` (${r.durationMs}ms)`);
-  const note = r.note ? dim(` — ${r.note}`) : "";
+  const note = r.note ? dim(`, ${r.note}`) : "";
   const lines = [`${STATUS_BADGE[r.status]} ${bold(r.gate)}${time}${note}`];
   for (const f of r.findings.slice(0, MAX_FINDINGS_SHOWN)) {
     const loc = f.file
@@ -31,9 +31,10 @@ export function renderHuman(verdict: Verdict): string {
   lines.push("");
   lines.push(
     verdict.ok
-      ? green(bold(`OK`)) + dim(` — all gates passed in ${verdict.durationMs}ms`)
+      ? green(bold(`OK`)) + dim(`, all gates passed in ${verdict.durationMs}ms`)
       : red(bold(`FAIL`)) +
-          ` at gate ${bold(String(verdict.failedGate))} — ${verdict.hint ?? "see findings"}`,
+          (verdict.failedGate === null ? "" : ` at gate ${bold(verdict.failedGate)}`) +
+          `, ${verdict.hint ?? "see findings"}`,
   );
   return lines.join("\n");
 }
@@ -44,8 +45,22 @@ export async function writeVerdict(verdict: Verdict, outDir: string): Promise<st
   return path;
 }
 
+/**
+ * Trust boundary: verdict files are produced by this tool, so only the fields
+ * the CLI branches on (ok, gates) are validated; gate elements are not
+ * deep-checked. A hand-corrupted file may still render oddly, never crash.
+ */
 export async function readVerdict(outDir: string): Promise<Verdict | null> {
   const file = Bun.file(`${outDir}/verdict.json`);
   if (!(await file.exists())) return null;
-  return (await file.json()) as Verdict;
+  let raw: unknown;
+  try {
+    raw = await file.json();
+  } catch {
+    return null;
+  }
+  if (typeof raw !== "object" || raw === null) return null;
+  const v = raw as Record<string, unknown>;
+  if (typeof v.ok !== "boolean" || !Array.isArray(v.gates)) return null;
+  return raw as Verdict;
 }

@@ -1,0 +1,107 @@
+<svg width="1280" height="400" viewBox="0 0 1280 400" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="hyperfixer — layered verification pipeline for AI-agent code. All gates passed.">
+  <defs>
+    <pattern id="gridMinor" width="16" height="16" patternUnits="userSpaceOnUse">
+      <path d="M 16 0 L 0 0 0 16" stroke="#FFFFFF" stroke-opacity="0.045" stroke-width="1"/>
+    </pattern>
+    <pattern id="gridMajor" width="80" height="80" patternUnits="userSpaceOnUse">
+      <path d="M 80 0 L 0 0 0 80" stroke="#FFFFFF" stroke-opacity="0.08" stroke-width="1"/>
+    </pattern>
+  </defs>
+
+  <!-- blueprint sheet -->
+  <rect width="1280" height="400" fill="#14395F"/>
+  <rect width="1280" height="400" fill="url(#gridMinor)"/>
+  <rect width="1280" height="400" fill="url(#gridMajor)"/>
+
+  <!-- drawing frame -->
+  <rect x="10" y="10" width="1260" height="380" stroke="#BFD7EF" stroke-opacity="0.35" stroke-width="1"/>
+  <rect x="22" y="22" width="1236" height="356" stroke="#BFD7EF" stroke-opacity="0.55" stroke-width="1.5"/>
+
+  <!-- corner registration ticks -->
+  <g stroke="#BFD7EF" stroke-opacity="0.7" stroke-width="1.5">
+    <path d="M 22 52 v -30 h 30"/>
+    <path d="M 1228 22 h 30 v 30"/>
+    <path d="M 22 348 v 30 h 30"/>
+    <path d="M 1258 348 v 30 h -30"/>
+  </g>
+
+  <g font-family="ui-monospace, 'Cascadia Code', Menlo, Consolas, monospace">
+    <!-- eyebrow -->
+    <text x="64" y="92" font-size="13" letter-spacing="4" fill="#9FC3E8">VERIFICATION PIPELINE · SHEET 01 · REV 0.1.0</text>
+
+    <!-- wordmark -->
+    <text x="60" y="168" font-size="66" font-weight="700" letter-spacing="4" fill="#F2F7FC">HYPERFIXER</text>
+    <line x1="64" y1="188" x2="560" y2="188" stroke="#BFD7EF" stroke-opacity="0.5" stroke-width="1"/>
+
+    <!-- tagline -->
+    <text x="64" y="222" font-size="20" fill="#DCEBFA">Make AI agents prove their code works.</text>
+    <text x="64" y="252" font-size="14" letter-spacing="1" fill="#8FB6DF">cost-ordered gates · fail-fast · machine-readable verdicts</text>
+
+    <!-- drawing note: the agent loop -->
+    <g>
+      <rect x="64" y="286" width="428" height="66" stroke="#9FC3E8" stroke-opacity="0.6" stroke-width="1" stroke-dasharray="5 4"/>
+      <text x="80" y="312" font-size="13" letter-spacing="2" fill="#9FC3E8">NOTE, AGENT LOOP</text>
+      <text x="80" y="336" font-size="15" fill="#DCEBFA">run → verdict.json → hint → fix → repeat</text>
+    </g>
+
+    <!-- title block: gate table -->
+    <g>
+      <rect x="756" y="64" width="448" height="238" fill="#0F2C4A" fill-opacity="0.55" stroke="#BFD7EF" stroke-opacity="0.7" stroke-width="1.5"/>
+      <!-- header -->
+      <text x="776" y="92" font-size="13" letter-spacing="3" fill="#9FC3E8">GATE</text>
+      <text x="1000" y="92" font-size="13" letter-spacing="3" fill="#9FC3E8" text-anchor="end">COST</text>
+      <text x="1108" y="92" font-size="13" letter-spacing="3" fill="#9FC3E8" text-anchor="end">TIME</text>
+      <text x="1160" y="92" font-size="13" letter-spacing="3" fill="#9FC3E8">PASS</text>
+      <line x1="756" y1="104" x2="1204" y2="104" stroke="#BFD7EF" stroke-opacity="0.7" stroke-width="1.5"/>
+
+      <!-- rows -->
+      <g font-size="16" fill="#F2F7FC">
+        <text x="776" y="132">lint</text>
+        <text x="1000" y="132" text-anchor="end" fill="#CFE3F6">5</text>
+        <text x="1108" y="132" text-anchor="end" fill="#CFE3F6">64ms</text>
+
+        <text x="776" y="168">typecheck</text>
+        <text x="1000" y="168" text-anchor="end" fill="#CFE3F6">10</text>
+        <text x="1108" y="168" text-anchor="end" fill="#CFE3F6">462ms</text>
+
+        <text x="776" y="204">typetest</text>
+        <text x="1000" y="204" text-anchor="end" fill="#CFE3F6">20</text>
+        <text x="1108" y="204" text-anchor="end" fill="#CFE3F6">20ms</text>
+
+        <text x="776" y="240">unit</text>
+        <text x="1000" y="240" text-anchor="end" fill="#CFE3F6">30</text>
+        <text x="1108" y="240" text-anchor="end" fill="#CFE3F6">22ms</text>
+
+        <text x="776" y="276">pbt</text>
+        <text x="1000" y="276" text-anchor="end" fill="#CFE3F6">40</text>
+        <text x="1108" y="276" text-anchor="end" fill="#CFE3F6">34ms</text>
+      </g>
+
+      <!-- row rules -->
+      <g stroke="#BFD7EF" stroke-opacity="0.25" stroke-width="1">
+        <line x1="756" y1="140" x2="1204" y2="140"/>
+        <line x1="756" y1="176" x2="1204" y2="176"/>
+        <line x1="756" y1="212" x2="1204" y2="212"/>
+        <line x1="756" y1="248" x2="1204" y2="248"/>
+      </g>
+
+      <!-- checkmarks -->
+      <g stroke="#7FE0A8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none">
+        <path d="M 1160 124 l 5 6 l 10 -12"/>
+        <path d="M 1160 160 l 5 6 l 10 -12"/>
+        <path d="M 1160 196 l 5 6 l 10 -12"/>
+        <path d="M 1160 232 l 5 6 l 10 -12"/>
+        <path d="M 1160 268 l 5 6 l 10 -12"/>
+      </g>
+
+      <text x="1204" y="326" font-size="13" letter-spacing="2" fill="#8FB6DF" text-anchor="end">TOTAL 601ms · EXIT 0</text>
+    </g>
+
+    <!-- QC stamp (signature element) -->
+    <g transform="translate(915 330) rotate(-7)">
+      <rect x="-160" y="-34" width="320" height="68" rx="8" stroke="#FF5A3C" stroke-width="3.5" fill="#14395F" fill-opacity="0.35"/>
+      <rect x="-152" y="-26" width="304" height="52" rx="5" stroke="#FF5A3C" stroke-width="1.5"/>
+      <text x="0" y="8" font-size="21" font-weight="700" letter-spacing="3" fill="#FF5A3C" text-anchor="middle">OK · ALL GATES PASSED</text>
+    </g>
+  </g>
+</svg>

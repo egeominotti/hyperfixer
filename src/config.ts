@@ -15,7 +15,12 @@ export const DEFAULT_GATES: GateSpec[] = [
     parser: "raw",
     optional: true,
   },
-  { name: "typecheck", cost: 10, command: ["bunx", "tsc", "--noEmit"], parser: "tsc" },
+  {
+    name: "typecheck",
+    cost: 10,
+    command: ["bunx", "tsc", "--noEmit", "--pretty", "false"],
+    parser: "tsc",
+  },
   {
     name: "typetest",
     cost: 20,
@@ -64,6 +69,13 @@ export function normalizeConfig(raw: unknown, source: string): HyperfixerConfig 
   const gates = Array.isArray(obj.gates)
     ? obj.gates.map((g, i) => normalizeGate(g, `${source}: gates[${i}]`))
     : base.gates;
+  const seen = new Set<string>();
+  for (const g of gates) {
+    if (seen.has(g.name)) {
+      throw new Error(`${source}: duplicate gate name "${g.name}"`);
+    }
+    seen.add(g.name);
+  }
   return {
     gates,
     failFast: typeof obj.failFast === "boolean" ? obj.failFast : base.failFast,
@@ -90,6 +102,9 @@ function normalizeGate(raw: unknown, source: string): GateSpec {
   if (typeof g.enabled === "boolean") spec.enabled = g.enabled;
   if (g.parser === "tsc" || g.parser === "bun-test" || g.parser === "raw") {
     spec.parser = g.parser;
+  }
+  if (typeof g.timeoutMs === "number" && g.timeoutMs > 0) {
+    spec.timeoutMs = g.timeoutMs;
   }
   return spec;
 }

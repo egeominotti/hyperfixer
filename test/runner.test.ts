@@ -57,6 +57,18 @@ describe("runPipeline", () => {
     expect(verdict.failedGate).toBe("a");
   });
 
+  test("zero gates executed is never ok", async () => {
+    const empty = await runPipeline({ ...baseConfig, gates: [] }, fakeExec({}));
+    expect(empty.ok).toBe(false);
+    expect(empty.hint).toContain("no gates executed");
+
+    const allSkipped = await runPipeline(
+      { ...baseConfig, gates: [gate("a", 1)] },
+      fakeExec({ a: "skip" }),
+    );
+    expect(allSkipped.ok).toBe(false);
+  });
+
   test("disabled gates are excluded entirely", async () => {
     const verdict = await runPipeline(
       { ...baseConfig, gates: [gate("a", 1), gate("b", 2, { enabled: false })] },
@@ -82,6 +94,14 @@ describe("spawnExecutor", () => {
   test("missing command skips", async () => {
     const r = await spawnExecutor(gate("none", 1));
     expect(r.status).toBe("skip");
+  });
+
+  test("hanging command times out as error", async () => {
+    const r = await spawnExecutor(
+      gate("hang", 1, { command: ["sleep", "5"], timeoutMs: 80 }),
+    );
+    expect(r.status).toBe("error");
+    expect(r.note).toContain("timed out after 80ms");
   });
 
   test("nonexistent binary: error when required, skip when optional", async () => {

@@ -3,10 +3,11 @@
   "outDir": ".hyperfixer",
   "gates": [
     { "name": "lint", "cost": 5, "command": ["bunx", "biome", "check", "."], "parser": "raw" },
-    { "name": "typecheck", "cost": 10, "command": ["bunx", "tsc", "--noEmit"], "parser": "tsc" },
+    { "name": "typecheck", "cost": 10, "command": ["bunx", "tsc", "--noEmit", "--pretty", "false"], "parser": "tsc" },
     { "name": "typetest", "cost": 20, "command": ["bun", "test", "test/types"], "parser": "bun-test" },
     { "name": "unit", "cost": 30, "command": ["bun", "test", "test/runner.test.ts", "test/parsers.test.ts"], "parser": "bun-test" },
     { "name": "pbt", "cost": 40, "command": ["bun", "test", "test/property"], "parser": "bun-test" },
+    { "name": "e2e", "cost": 60, "command": ["bun", "test", "test/e2e"], "parser": "bun-test" },
     { "name": "mutation", "cost": 100, "enabled": false, "optional": true }
   ]
 }

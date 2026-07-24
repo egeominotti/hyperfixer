@@ -33,6 +33,8 @@ export interface GateSpec {
   optional?: boolean;
   parser?: ParserKind;
   enabled?: boolean;
+  /** Kill the gate process after this many ms. Default 600000 (10 min). */
+  timeoutMs?: number;
 }
 
 export interface HyperfixerConfig {
@@ -45,6 +47,8 @@ export interface HyperfixerConfig {
 
 export interface Verdict {
   ok: boolean;
+  /** ISO timestamp of when this verdict was produced. Guards against stale reads. */
+  generatedAt: string;
   /** Name of the first gate that failed or errored, null when ok. */
   failedGate: string | null;
   gates: GateResult[];

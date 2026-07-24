@@ -8,6 +8,8 @@ import type {
 } from "./types.ts";
 
 const TAIL_CHARS = 4000;
+const DEFAULT_TIMEOUT_MS = 600_000;
+const KILL_GRACE_MS = 5_000;
 
 export const spawnExecutor: GateExecutor = async (gate) => {
   const start = performance.now();
@@ -24,13 +26,43 @@ export const spawnExecutor: GateExecutor = async (gate) => {
     };
   }
   try {
+    const timeoutMs = gate.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+    let timedOut = false;
+    let killTimer: ReturnType<typeof setTimeout> | undefined;
     const proc = Bun.spawn(command, { stdout: "pipe", stderr: "pipe" });
-    const [out, err] = await Promise.all([
-      new Response(proc.stdout).text(),
-      new Response(proc.stderr).text(),
-    ]);
-    const exitCode = await proc.exited;
+    const timer = setTimeout(() => {
+      // exitCode is non-null once the process has exited: avoid a false
+      // timeout when the gate finishes right at the boundary.
+      if (proc.exitCode !== null) return;
+      timedOut = true;
+      proc.kill();
+      killTimer = setTimeout(() => proc.kill("SIGKILL"), KILL_GRACE_MS);
+    }, timeoutMs);
+    let out: string;
+    let err: string;
+    let exitCode: number;
+    try {
+      [out, err] = await Promise.all([
+        new Response(proc.stdout).text(),
+        new Response(proc.stderr).text(),
+      ]);
+      exitCode = await proc.exited;
+    } finally {
+      clearTimeout(timer);
+      clearTimeout(killTimer);
+    }
     const combined = out + (err ? `\n${err}` : "");
+    if (timedOut) {
+      return {
+        gate: gate.name,
+        status: "error",
+        durationMs: Math.round(performance.now() - start),
+        exitCode: null,
+        findings: [],
+        outputTail: combined.slice(-TAIL_CHARS),
+        note: `timed out after ${timeoutMs}ms`,
+      };
+    }
     const findings = parseOutput(gate.parser ?? "raw", combined);
     return {
       gate: gate.name,
@@ -72,7 +104,7 @@ export function buildHint(results: GateResult[]): string | null {
   const first = blocking.findings[0];
   if (first) {
     const loc = first.file
-      ? `${first.file}${first.line !== undefined ? `:${first.line}` : ""} — `
+      ? `${first.file}${first.line !== undefined ? `:${first.line}` : ""}, `
       : "";
     const more =
       blocking.findings.length > 1 ? ` (+${blocking.findings.length - 1} more)` : "";
@@ -105,11 +137,19 @@ export async function runPipeline(
   }
 
   const failed = results.find((r) => r.status === "fail" || r.status === "error");
+  // "Ran nothing" must never masquerade as green: ok requires at least one
+  // gate to have actually executed.
+  const executed = results.some((r) => r.status !== "skip");
   return {
-    ok: failed === undefined,
+    ok: failed === undefined && executed,
+    generatedAt: new Date().toISOString(),
     failedGate: failed?.gate ?? null,
     gates: results,
     durationMs: Math.round(performance.now() - start),
-    hint: buildHint(results),
+    hint: failed
+      ? buildHint(results)
+      : executed
+        ? null
+        : "[pipeline] no gates executed, check gates config and --max-cost",
   };
 }

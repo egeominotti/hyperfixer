@@ -1,17 +1,23 @@
+<p align="center">
+  <img src="assets/cover.svg" alt="hyperfixer, layered verification pipeline for AI-agent code" width="100%">
+</p>
+
 # hyperfixer
+
+[![CI](https://github.com/egeominotti/hyperfixer/actions/workflows/ci.yml/badge.svg)](https://github.com/egeominotti/hyperfixer/actions/workflows/ci.yml)
 
 **Layered verification pipeline for AI-agent-written code.**
 
-hyperfixer runs your project's quality gates in cost order — cheapest first, fail-fast — and produces a machine-readable verdict that a coding agent can consume to fix its own mistakes. Humans get a colored summary; agents get `verdict.json` and a one-line `hint` pointing at the first actionable problem.
+hyperfixer runs your project's quality gates in cost order, cheapest first, fail-fast, and produces a machine-readable verdict that any coding agent can consume to fix its own mistakes. Humans get a colored summary; agents get `verdict.json` and a one-line `hint` pointing at the first actionable problem.
 
 ```
 ✓ lint (64ms)
 ✓ typecheck (462ms)
 ✓ typetest (20ms)
 ✓ unit (22ms)
-✓ pbt (32ms)
+✓ pbt (34ms)
 
-OK — all gates passed in 601ms
+OK, all gates passed in 601ms
 ```
 
 ## Why
@@ -28,11 +34,11 @@ Agent-written code fails in layers, and each layer needs a different detector:
 | Differential/parity | Two implementations disagreeing | project-defined oracle |
 | Mutation | Tests that pass but assert nothing | [Stryker](https://stryker-mutator.io) |
 
-Running everything on every change is wasteful; running only unit tests misses whole failure classes. hyperfixer orders gates by cost, stops at the first failure, and tells the agent exactly where to look — so the feedback loop is fast *and* honest.
+Running everything on every change is wasteful; running only unit tests misses whole failure classes. hyperfixer orders gates by cost, stops at the first failure, and tells the agent exactly where to look, so the feedback loop is fast *and* honest.
 
 ## Requirements
 
-- [Bun](https://bun.sh) ≥ 1.1
+- [Bun](https://bun.sh) >= 1.1
 
 ## Quick start
 
@@ -41,6 +47,7 @@ bun add -d hyperfixer        # or clone this repo
 bunx hyperfixer init         # writes hyperfixer.config.json
 bunx hyperfixer doctor       # verify toolchain
 bunx hyperfixer run          # run the pipeline
+bunx hyperfixer install-hooks  # enforce on git commit and push
 ```
 
 ## CLI
@@ -50,17 +57,19 @@ hyperfixer run [flags]      run gates in cost order, write verdict, exit 0/1
 hyperfixer init             write default hyperfixer.config.json
 hyperfixer hint             print first actionable fix from last verdict
 hyperfixer doctor           check toolchain and config health
+hyperfixer install-hooks    install git pre-commit and pre-push hooks
 
 Run flags:
   --json                machine-readable verdict on stdout
   --quiet               no human output (verdict.json still written)
   --config <path>       config file (default hyperfixer.config.json)
   --only <a,b>          run only the named gates
+  --max-cost <n>        run only gates with cost <= n
   --no-fail-fast        run all gates even after a failure
   --out-dir <dir>       verdict output directory (default .hyperfixer)
 ```
 
-Exit codes: `0` all gates pass · `1` a gate failed · `2` usage or config error.
+Exit codes: `0` all gates pass, `1` a gate failed, `2` usage or config error. The contract is strict: agents can branch on the exit code alone.
 
 ## Configuration
 
@@ -72,7 +81,7 @@ Exit codes: `0` all gates pass · `1` a gate failed · `2` usage or config error
   "outDir": ".hyperfixer",
   "gates": [
     { "name": "lint",      "cost": 5,   "command": ["bunx", "biome", "check", "."] },
-    { "name": "typecheck", "cost": 10,  "command": ["bunx", "tsc", "--noEmit"], "parser": "tsc" },
+    { "name": "typecheck", "cost": 10,  "command": ["bunx", "tsc", "--noEmit", "--pretty", "false"], "parser": "tsc" },
     { "name": "unit",      "cost": 30,  "command": ["bun", "test"], "parser": "bun-test" },
     { "name": "pbt",       "cost": 40,  "command": ["bun", "test", "test/property"], "parser": "bun-test" },
     { "name": "mutation",  "cost": 100, "command": ["bunx", "stryker", "run", "--incremental"], "enabled": false, "optional": true }
@@ -82,28 +91,65 @@ Exit codes: `0` all gates pass · `1` a gate failed · `2` usage or config error
 
 | Field | Meaning |
 |---|---|
-| `cost` | Relative cost; gates run in ascending order |
+| `cost` | Relative cost; gates run in ascending order, `--max-cost` filters on it |
 | `command` | Argv array; omit to skip the gate |
-| `parser` | `tsc`, `bun-test`, or `raw` — extracts structured findings from output |
+| `parser` | `tsc`, `bun-test`, or `raw`, extracts structured findings from output |
 | `optional` | Skip (instead of error) when the command cannot start |
 | `enabled` | `false` removes the gate from the pipeline |
+| `timeoutMs` | Kill the gate after this many ms (default 600000) |
 
-## Agent integration
+Gate names must be unique; duplicates are rejected at load time. A hanging gate cannot wedge an unattended agent loop: it is killed at `timeoutMs` and reported as `error`.
 
-The core loop an agent should run:
+## Works with any agent
+
+hyperfixer is agent-agnostic by construction: the interface is a CLI with strict exit codes, a JSON verdict on disk, and git hooks. Claude Code, Codex, Cursor, Kimi, Grok, or a plain shell script all consume it the same way.
+
+**The universal loop** (put this in your agent's instructions file, `AGENTS.md` or `CLAUDE.md`):
 
 ```bash
 hyperfixer run --quiet || hyperfixer hint
-# => [typecheck] src/service.ts:42 — Type 'string' is not assignable to type 'number'. (+3 more)
+# => [typecheck] src/service.ts:42, Type 'string' is not assignable to type 'number'. (+3 more)
+# fix, then re-run until exit 0
 ```
+
+**Hard enforcement, works for every agent and every human:**
+
+```bash
+hyperfixer install-hooks
+# pre-commit: gates with cost <= 50 (fast)
+# pre-push:   full pipeline
+```
+
+The hooks are plain `sh`, refuse to overwrite hooks they did not write, and print the hint on failure so the blocked agent knows what to fix.
+
+**Claude Code**, blocking enforcement via [PreToolUse hook](https://docs.anthropic.com/en/docs/claude-code/hooks) in `.claude/settings.json`:
+
+```json
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash(git commit*)",
+        "hooks": [{ "type": "command", "command": "bunx hyperfixer run --quiet || { bunx hyperfixer hint >&2; exit 2; }" }]
+      }
+    ]
+  }
+}
+```
+
+Exit 2 blocks the tool call and feeds the hint back to the agent, which fixes and retries.
+
+## The verdict
 
 `hint` prints the first actionable problem with file and line; the full structured verdict is in `.hyperfixer/verdict.json`:
 
 ```jsonc
 {
   "ok": false,
+  "generatedAt": "2026-07-24T10:30:00.000Z",   // staleness guard
   "failedGate": "typecheck",
-  "hint": "[typecheck] src/service.ts:42 — Type 'string' is not assignable…",
+  "hint": "[typecheck] src/service.ts:42, Type 'string' is not assignable…",
+  "durationMs": 533,
   "gates": [
     {
       "gate": "typecheck",
@@ -119,17 +165,7 @@ hyperfixer run --quiet || hyperfixer hint
 }
 ```
 
-As a Claude Code [Stop hook](https://docs.anthropic.com/en/docs/claude-code/hooks), so every agent turn ends verified:
-
-```json
-{
-  "hooks": {
-    "Stop": [
-      { "hooks": [{ "type": "command", "command": "bunx hyperfixer run --quiet || bunx hyperfixer hint" }] }
-    ]
-  }
-}
-```
+`hint` warns on stderr when the verdict is older than 10 minutes, so an agent that edited code without re-running cannot trust a stale "OK".
 
 ## Programmatic API
 
@@ -144,10 +180,10 @@ if (!verdict.ok) console.error(verdict.hint);
 
 ```bash
 bun install
-bun run check        # hyperfixer verifying itself (lint → typecheck → typetest → unit → pbt)
+bun run check        # hyperfixer verifying itself (lint, typecheck, typetest, unit, pbt)
 ```
 
-The repo dogfoods its own pipeline: property-based tests assert verdict invariants (`ok ⟺ no failing gate`, fail-fast skips everything after the first failure), and type tests pin the public API.
+The repo dogfoods its own pipeline: property-based tests assert verdict invariants (`ok` if and only if no failing gate, fail-fast skips everything after the first failure), and type tests pin the public API. CI runs the pipeline on every push; a green build on `main` bumps the patch version, updates `CHANGELOG.md` and tags the release automatically.
 
 ## License
 

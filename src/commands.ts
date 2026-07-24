@@ -4,6 +4,8 @@ import { readVerdict, renderHuman, writeVerdict } from "./report.ts";
 import { runPipeline } from "./runner.ts";
 import type { HyperfixerConfig } from "./types.ts";
 
+const STALE_AFTER_MS = 10 * 60_000;
+
 export interface RunFlags {
   json: boolean;
   quiet: boolean;
@@ -11,6 +13,7 @@ export interface RunFlags {
   only: string[] | null;
   noFailFast: boolean;
   outDir: string | null;
+  maxCost: number | null;
 }
 
 export async function cmdRun(flags: RunFlags): Promise<number> {
@@ -35,6 +38,12 @@ export async function cmdRun(flags: RunFlags): Promise<number> {
       enabled: only.includes(g.name),
     }));
   }
+  const maxCost = flags.maxCost;
+  if (maxCost !== null) {
+    config.gates = config.gates.map((g) =>
+      g.cost <= maxCost ? g : { ...g, enabled: false },
+    );
+  }
   if (flags.noFailFast) config.failFast = false;
   if (flags.outDir !== null) config.outDir = flags.outDir;
 
@@ -55,20 +64,30 @@ export async function cmdInit(): Promise<number> {
     return 2;
   }
   await Bun.write(CONFIG_FILE, `${JSON.stringify(defaultConfig(), null, 2)}\n`);
-  console.log(`wrote ${bold(CONFIG_FILE)} — enable/adjust gates, then: hyperfixer run`);
+  console.log(`wrote ${bold(CONFIG_FILE)}, enable/adjust gates, then: hyperfixer run`);
   return 0;
 }
 
-/** Print the last verdict's first actionable hint — for agent consumption. */
+/** Print the last verdict's first actionable hint, for agent consumption. */
 export async function cmdHint(configPath: string): Promise<number> {
-  const config = await loadConfig(configPath);
-  const verdict = await readVerdict(config.outDir);
-  if (!verdict) {
-    console.error(`no verdict found in ${config.outDir}/ — run "hyperfixer run" first`);
+  let config: HyperfixerConfig;
+  try {
+    config = await loadConfig(configPath);
+  } catch (e) {
+    console.error(red(e instanceof Error ? e.message : String(e)));
     return 2;
   }
+  const verdict = await readVerdict(config.outDir);
+  if (!verdict) {
+    console.error(`no verdict found in ${config.outDir}/, run "hyperfixer run" first`);
+    return 2;
+  }
+  const ageMs = Date.now() - Date.parse(verdict.generatedAt ?? "");
+  if (!Number.isFinite(ageMs) || ageMs > STALE_AFTER_MS) {
+    console.error('warning: verdict may be stale, re-run "hyperfixer run"');
+  }
   console.log(
-    verdict.ok ? "OK — nothing to fix" : (verdict.hint ?? "FAIL — see verdict.json"),
+    verdict.ok ? "OK, nothing to fix" : (verdict.hint ?? "FAIL, see verdict.json"),
   );
   return verdict.ok ? 0 : 1;
 }
@@ -87,7 +106,7 @@ export async function cmdDoctor(configPath: string): Promise<number> {
   let failures = 0;
   const report = (ok: boolean, label: string, fix?: string) => {
     console.log(
-      `${ok ? green("✓") : red("✗")} ${label}${!ok && fix ? dim(` — ${fix}`) : ""}`,
+      `${ok ? green("✓") : red("✗")} ${label}${!ok && fix ? dim(`, ${fix}`) : ""}`,
     );
     if (!ok) failures++;
   };
