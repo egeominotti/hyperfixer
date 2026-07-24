@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Guide · hyperfixer</title>
+<meta name="description" content="How hyperfixer works internally, the correct workflow, and every error you can hit with its fix.">
+<link rel="canonical" href="https://egeominotti.github.io/hyperfixer/guide.html">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="hyperfixer">
+<meta property="og:title" content="Guide · hyperfixer">
+<meta property="og:description" content="How hyperfixer works internally, the correct workflow, and every error you can hit with its fix.">
+<meta property="og:url" content="https://egeominotti.github.io/hyperfixer/guide.html">
+<meta property="og:image" content="https://egeominotti.github.io/hyperfixer/assets/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="stylesheet" href="style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛡️</text></svg>">
+</head>
+<body>
+<div class="frame">
+<nav>
+  <a class="brand" href="index.html">HYPERFIXER</a>
+  <a href="index.html">Home</a>
+  <a href="guide.html" aria-current="page">Guide</a>
+  <a href="cli.html">CLI</a>
+  <a href="config.html">Config</a>
+  <a href="agents.html">Agents</a>
+  <a href="simulator.html">Simulator</a>
+  <a href="https://github.com/egeominotti/hyperfixer">GitHub</a>
+</nav>
+
+<p class="eyebrow">Manual · Sheet 06</p>
+<h1>GUIDE</h1>
+
+<h2>How it works</h2>
+<ol>
+  <li><strong>Load and validate config</strong>: <code>hyperfixer.config.json</code> is parsed and validated (unique gate names, numeric costs). Any config problem is exit 2, before anything runs.</li>
+  <li><strong>Sort and group</strong>: enabled gates are sorted by <code>cost</code>; gates with equal cost form one group and run concurrently.</li>
+  <li><strong>Execute with guards</strong>: each gate is a plain argv command (no shell). Output is captured, a per-gate timeout (default 10 min) sends SIGTERM then SIGKILL, parsers extract structured findings.</li>
+  <li><strong>Fail-fast</strong>: when a group produces a fail or error, every later cost group is skipped. Siblings in the same group always finish.</li>
+  <li><strong>Cache</strong>: a gate with <code>inputs</code> globs is fingerprinted (command + file contents, hashed per file). Same fingerprint and a previous pass means an instant hit; failures are never cached.</li>
+  <li><strong>Verdict</strong>: <code>.hyperfixer/verdict.json</code> is written with per-gate results and a one-line <code>hint</code>. Exit 0 only when at least one gate executed and none failed.</li>
+</ol>
+
+<h2>The correct way to use it</h2>
+<ol>
+  <li><code>hyperfixer init</code>, then open the generated config and check the detected gates match your project.</li>
+  <li><code>hyperfixer doctor</code>, fix anything red before trusting the pipeline.</li>
+  <li>Loop while coding: <code>hyperfixer run --quiet || hyperfixer hint</code>, fix the hint, re-run until exit 0. Always re-run <code>run</code> after edits, never trust an old <code>hint</code>.</li>
+  <li>Declare <code>inputs</code> on every gate you can, caching is what makes the loop fast.</li>
+  <li>Order costs by real runtime, cheap first. Keep expensive gates (mutation, e2e) above 50 so the pre-commit profile skips them and pre-push runs them.</li>
+  <li>Enforce: <code>hyperfixer install-hooks</code> (git) plus <code>hyperfixer install-claude</code> (Claude Code) plus the GitHub Action in CI.</li>
+  <li>In agent instructions, tell the agent to branch on exit codes: 0 done, 1 read the hint and fix code, 2 fix setup or config, never retry blindly.</li>
+</ol>
+
+<h2>Errors you can hit, and the fix</h2>
+<table>
+  <tr><th>Symptom</th><th>Cause</th><th>Fix</th></tr>
+  <tr><td><code>exit 2</code>, "config must be a JSON object" or a parse error</td><td>Malformed <code>hyperfixer.config.json</code></td><td>Fix the JSON; <code>hyperfixer doctor</code> validates it</td></tr>
+  <tr><td><code>exit 2</code>, duplicate gate name "x"</td><td>Two gates share a name</td><td>Rename one, names must be unique</td></tr>
+  <tr><td><code>FAIL, [pipeline] no gates executed</code></td><td><code>--max-cost</code> below every gate, or all gates disabled</td><td>Raise <code>--max-cost</code> or enable gates; this is deliberate, an empty pipeline is never green</td></tr>
+  <tr><td>Gate <code>error</code>, "command failed to start"</td><td>Binary not installed or typo in <code>command</code></td><td>Install the tool, or mark the gate <code>"optional": true</code> to skip instead</td></tr>
+  <tr><td>Gate <code>error</code>, "timed out after Xms"</td><td>Hung tool, watch mode, or a prompt waiting for stdin</td><td>Remove watch flags, raise <code>timeoutMs</code> if genuinely slow. Known limit: a gate that forks children may not be fully bounded, kill strays manually</td></tr>
+  <tr><td><code>[typecheck] Cannot find type definition file for 'bun-types'</code> (TS2688)</td><td>tsconfig references types not installed</td><td><code>bun add -d @types/bun</code> and use <code>"types": ["@types/bun"]</code></td></tr>
+  <tr><td>Typecheck green but findings look empty on failure</td><td>tsc <code>--pretty</code> output defeats the parser</td><td>Keep <code>--pretty false</code> in the command (init default); raw detail is always in <code>outputTail</code></td></tr>
+  <tr><td>Stryker crashes with <code>ts.parseConfigFileTextToJson is not a function</code></td><td>TypeScript 7 installed, Stryker needs the TS 5 API</td><td><code>bun add -d typescript@~5.9</code> and set <code>"disableTypeChecks": true</code> in stryker.conf</td></tr>
+  <tr><td>Mutation gate very slow</td><td>Bun has no official Stryker runner, command runner re-runs the suite per mutant</td><td>Keep <code>"mutate"</code> scoped to few files, run it only pre-push or in CI</td></tr>
+  <tr><td><code>warning: verdict may be stale</code> on stderr from <code>hint</code></td><td>verdict.json older than 10 minutes</td><td>Re-run <code>hyperfixer run</code>, then <code>hint</code></td></tr>
+  <tr><td>Suspicious green after big changes</td><td>Cache hit on a gate whose <code>inputs</code> globs miss some files</td><td>Fix the globs to cover every dependency, or <code>--no-cache</code> to force a full run</td></tr>
+  <tr><td>Git hook did not run</td><td>Foreign hook left untouched (install exits 1), or <code>core.hooksPath</code> points elsewhere</td><td>Read the install output, merge manually; hooks resolve via <code>git rev-parse --git-path hooks</code>, worktree safe</td></tr>
+  <tr><td>Agent bypassed the Claude hook</td><td>Alias or wrapper (<code>gp</code>, scripts) instead of plain <code>git push</code></td><td>By design best effort; the git hooks and CI layers catch what the matcher misses</td></tr>
+  <tr><td><code>env: bun: No such file or directory</code></td><td>Package ran on a machine without Bun</td><td>Install Bun (>= 1.1), hyperfixer is Bun-only</td></tr>
+</table>
+
+<h2>Reading the verdict like an agent</h2>
+<pre><span class="dim">exit 0</span>  done, commit or continue
+<span class="dim">exit 1</span>  read hint, open file:line, fix CODE, re-run
+<span class="dim">exit 2</span>  fix SETUP: config JSON, gate names, missing flags
+</pre>
+<p>The <code>hint</code> is always the first blocking finding. The full list, per-gate <code>outputTail</code> and timings live in <code>.hyperfixer/verdict.json</code>. Cached entries carry <code>"cached": true</code>, skipped gates carry a <code>note</code> explaining why.</p>
+
+<footer>
+  <span>HYPERFIXER · MIT · <a href="llms.txt">llms.txt</a> · <a href="llms-full.txt">llms-full.txt</a></span>
+  <span><a href="https://github.com/egeominotti/hyperfixer">github.com/egeominotti/hyperfixer</a></span>
+</footer>
+</div>
+</body>
+</html>

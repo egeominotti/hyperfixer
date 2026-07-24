@@ -10,7 +10,7 @@ Key facts:
 - Exit codes are a strict contract: 0 all gates pass, 1 a gate failed or zero gates executed, 2 usage or config error
 - The agent loop: `hyperfixer run --quiet || hyperfixer hint`, fix, repeat until exit 0
 - Gates are shell commands with a cost; equal costs run concurrently, fail-fast blocks later cost groups only
-- Gates declaring `inputs` globs are cached by input hash (command + path, size, mtime), failures never cached, typical re-verify drops from seconds to milliseconds
+- Gates declaring `inputs` globs are cached by input hash (command + file contents), failures never cached, typical re-verify drops from seconds to milliseconds
 - `{changed}` token in a gate command plus `--changed` expands to git-changed files, gate disabled when the tree is clean
 - Verdict JSON fields: ok, generatedAt, failedGate, hint, durationMs, gates[] with gate, status (pass|fail|skip|error), durationMs, exitCode, findings[] (file, line, column, code, message), outputTail, cached
 - Hanging gates are killed at timeoutMs (default 600000, SIGTERM then SIGKILL), duplicate gate names rejected, an empty pipeline is exit 1, never a false green

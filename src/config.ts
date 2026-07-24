@@ -100,7 +100,12 @@ function normalizeGate(raw: unknown, source: string): GateSpec {
   }
   if (typeof g.optional === "boolean") spec.optional = g.optional;
   if (typeof g.enabled === "boolean") spec.enabled = g.enabled;
-  if (g.parser === "tsc" || g.parser === "bun-test" || g.parser === "raw") {
+  if (
+    g.parser === "tsc" ||
+    g.parser === "bun-test" ||
+    g.parser === "fast-check" ||
+    g.parser === "raw"
+  ) {
     spec.parser = g.parser;
   }
   if (typeof g.timeoutMs === "number" && g.timeoutMs > 0) {

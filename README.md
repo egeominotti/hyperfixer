@@ -25,7 +25,17 @@ hyperfixer runs your project's quality gates in cost order, cheapest first, fail
 OK, all gates passed in 601ms
 ```
 
-## Why
+## The agent contract
+
+Task runners that order and cache commands already exist. What hyperfixer adds is a **contract a coding agent can rely on**, and this is the part to build your loop around:
+
+- **Strict exit codes**: `0` verified, `1` your code is wrong (read the hint), `2` the setup is wrong (fix config, not code). A broken config can never masquerade as a test failure.
+- **Structured verdict** on disk: per-gate status, structured `findings` with file and line, timings, `outputTail`, `generatedAt`.
+- **One-line `hint`**: the first blocking problem, pre-formatted as `[gate] file:line, message`, the exact string to feed back to the agent.
+- **Staleness guard**: `hint` warns when the verdict is older than 10 minutes, so an agent that edited code cannot trust a stale green.
+- **No false greens**: an empty pipeline (over-filtered `--max-cost`, all gates disabled) is exit 1, failures are never cached, and property tests print fast-check replay data (seed, path, counterexample) into the verdict so the agent can re-run the exact failing case.
+
+## Why layers
 
 Agent-written code fails in layers, and each layer needs a different detector:
 
@@ -114,7 +124,7 @@ Exit codes: `0` all gates pass, `1` a gate failed, `2` usage or config error. Th
 |---|---|
 | `cost` | Relative cost; gates run in ascending order, `--max-cost` filters on it |
 | `command` | Argv array; omit to skip the gate |
-| `parser` | `tsc`, `bun-test`, or `raw`, extracts structured findings from output |
+| `parser` | `tsc`, `bun-test`, `fast-check`, or `raw`, extracts structured findings from output |
 | `optional` | Skip (instead of error) when the command cannot start |
 | `enabled` | `false` removes the gate from the pipeline |
 | `timeoutMs` | Kill the gate after this many ms (default 600000) |
@@ -122,7 +132,7 @@ Exit codes: `0` all gates pass, `1` a gate failed, `2` usage or config error. Th
 
 Gate names must be unique; duplicates are rejected at load time. A hanging gate cannot wedge an unattended agent loop: it is killed at `timeoutMs` (SIGTERM, then SIGKILL) and reported as `error`. Gates with equal `cost` run concurrently as a group; fail-fast blocks later groups only.
 
-**Caching**: a gate that declares `inputs` stores its passing result keyed by a hash of command + file metadata (path, size, mtime). Unchanged inputs mean an instant cache hit; failures are never cached; `--no-cache` bypasses it.
+**Caching**: a gate that declares `inputs` stores its passing result keyed by a hash of command + **file contents** (Bun.hash per file). Touching a file or a checkout that rewrites identical bytes never invalidates; a real content change always does. Failures are never cached; `--no-cache` bypasses it.
 
 **Changed-only mode**: put `{changed}` in a gate command and run with `--changed`; the token expands to the files git reports as modified, and the gate is skipped entirely when the tree is clean.
 

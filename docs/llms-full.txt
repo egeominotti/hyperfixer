@@ -86,7 +86,7 @@ Gate fields:
 
 - `cost` (number, required): gates run in ascending order, equal costs run concurrently as a group, --max-cost filters on it
 - `command` (string[]): argv array, no shell; omit to skip the gate
-- `parser`: "tsc" | "bun-test" | "raw", extracts structured findings from output
+- `parser`: "tsc" | "bun-test" | "fast-check" | "raw", extracts structured findings from output; fast-check failures surface counterexample, seed and path for exact replay
 - `optional` (boolean): skip instead of error when the command cannot start
 - `enabled` (boolean): false removes the gate from the pipeline
 - `timeoutMs` (number): kill the gate after this many ms, default 600000, SIGTERM then SIGKILL after 5s

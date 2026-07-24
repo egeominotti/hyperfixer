@@ -25,15 +25,18 @@ describe("gateHash", () => {
     expect(gateHash({ name: "a", cost: 1, command: ["true"] })).toBeNull();
   });
 
-  test("hash changes when an input file changes mtime", async () => {
+  test("hash is content-based: touch is stable, content change invalidates", async () => {
     const dir = mkdtempSync(join(tmpdir(), "hyperfixer-cache-"));
     try {
       await Bun.write(join(dir, "a.ts"), "export {}");
       const gate: GateSpec = { name: "g", cost: 1, command: ["true"], inputs: ["*.ts"] };
       const h1 = gateHash(gate, dir);
-      const h2 = gateHash(gate, dir);
-      expect(h1).toBe(h2 as string);
+      expect(gateHash(gate, dir)).toBe(h1 as string);
+      // mtime-only change (touch, git checkout rewriting identical bytes) must NOT invalidate
       utimesSync(join(dir, "a.ts"), new Date(), new Date(Date.now() + 5000));
+      expect(gateHash(gate, dir)).toBe(h1 as string);
+      // real content change must invalidate
+      await Bun.write(join(dir, "a.ts"), "export const x = 1;");
       expect(gateHash(gate, dir)).not.toBe(h1 as string);
     } finally {
       rmSync(dir, { recursive: true, force: true });

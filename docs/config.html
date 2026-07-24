@@ -57,7 +57,7 @@
   <tr><th>Field</th><th>Meaning</th></tr>
   <tr><td><code>cost</code></td><td>Relative cost; gates run in ascending order, equal costs run concurrently as a group, <code>--max-cost</code> filters on it</td></tr>
   <tr><td><code>command</code></td><td>Argv array, no shell; omit to skip the gate</td></tr>
-  <tr><td><code>parser</code></td><td><code>tsc</code>, <code>bun-test</code>, or <code>raw</code>, extracts structured findings from output</td></tr>
+  <tr><td><code>parser</code></td><td><code>tsc</code>, <code>bun-test</code>, <code>fast-check</code>, or <code>raw</code>, extracts structured findings from output</td></tr>
   <tr><td><code>optional</code></td><td>Skip (instead of error) when the command cannot start</td></tr>
   <tr><td><code>enabled</code></td><td><code>false</code> removes the gate from the pipeline</td></tr>
   <tr><td><code>timeoutMs</code></td><td>Kill the gate after this many ms, default 600000</td></tr>
@@ -65,7 +65,7 @@
 </table>
 
 <h2>Caching</h2>
-<p>A gate that declares <code>inputs</code> stores its passing result keyed by a hash of command + file metadata (path, size, mtime). Unchanged inputs mean an instant cache hit. Failures are never cached, and gates without <code>inputs</code> always run. <code>--no-cache</code> bypasses everything.</p>
+<p>A gate that declares <code>inputs</code> stores its passing result keyed by a hash of command + file contents. Touching a file never invalidates, a real content change always does; unchanged inputs mean an instant cache hit. Failures are never cached, and gates without <code>inputs</code> always run. <code>--no-cache</code> bypasses everything.</p>
 
 <h2>Changed-only mode</h2>
 <p>Put <code>{changed}</code> in a gate command and run with <code>--changed</code>: the token expands to the files git reports as modified (staged, unstaged and untracked, NUL-safe for spaces and unicode), and the gate is disabled when the tree is clean.</p>

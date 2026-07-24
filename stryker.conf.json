@@ -1,0 +1,14 @@
+{
+  "$schema": "https://raw.githubusercontent.com/stryker-mutator/stryker-js/master/packages/core/schema/stryker-schema.json",
+  "testRunner": "command",
+  "commandRunner": {
+    "command": "bun test test/runner.test.ts test/parsers.test.ts test/cache.test.ts test/changed.test.ts test/property"
+  },
+  "mutate": ["src/parsers.ts", "src/changed.ts", "src/runner.ts"],
+  "disableTypeChecks": true,
+  "reporters": ["clear-text", "progress"],
+  "concurrency": 4,
+  "tempDirName": ".stryker-tmp",
+  "cleanTempDir": true,
+  "thresholds": { "high": 90, "low": 75, "break": 60 }
+}

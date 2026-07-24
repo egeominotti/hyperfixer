@@ -1,22 +1,36 @@
 import type { Finding, ParserKind } from "./types.ts";
 
 const TSC_LINE = /^(.+?)\((\d+),(\d+)\): error (TS\d+): (.*)$/;
+// Config-level errors carry no location, e.g. "error TS2688: Cannot find …".
+const TSC_BARE = /^error (TS\d+): (.*)$/;
 
 export function parseTsc(output: string): Finding[] {
   const findings: Finding[] = [];
   for (const line of output.split("\n")) {
-    const m = TSC_LINE.exec(line.trim());
-    if (!m) continue;
-    const [, file, ln, col, code, message] = m;
-    if (file === undefined || ln === undefined || col === undefined || code === undefined)
+    const trimmed = line.trim();
+    const m = TSC_LINE.exec(trimmed);
+    if (m) {
+      const [, file, ln, col, code, message] = m;
+      if (
+        file === undefined ||
+        ln === undefined ||
+        col === undefined ||
+        code === undefined
+      )
+        continue;
+      findings.push({
+        file,
+        line: Number(ln),
+        column: Number(col),
+        code,
+        message: message ?? "",
+      });
       continue;
-    findings.push({
-      file,
-      line: Number(ln),
-      column: Number(col),
-      code,
-      message: message ?? "",
-    });
+    }
+    const bare = TSC_BARE.exec(trimmed);
+    if (bare?.[1] !== undefined) {
+      findings.push({ code: bare[1], message: bare[2] ?? "" });
+    }
   }
   return findings;
 }
@@ -51,7 +65,26 @@ export function parseBunTest(output: string): Finding[] {
     if (line !== undefined) finding.line = line;
     findings.push(finding);
   }
+  // Property tests print replay data on failure: surface it so an agent can
+  // re-run the exact failing case.
+  findings.push(...parseFastCheck(output));
   return findings;
+}
+
+// fast-check failure output:  "{ seed: -123, path: "300:1:2", endOnFailure: true }"
+const FC_SEED = /\{\s*seed:\s*(-?\d+),\s*path:\s*"([^"]+)"/;
+const FC_COUNTEREXAMPLE = /^Counterexample:\s*(.*)$/m;
+
+export function parseFastCheck(output: string): Finding[] {
+  const seed = FC_SEED.exec(output);
+  const cx = FC_COUNTEREXAMPLE.exec(output);
+  if (!seed && !cx) return [];
+  const parts: string[] = [];
+  if (cx?.[1]) parts.push(`counterexample ${cx[1]}`);
+  if (seed?.[1] !== undefined && seed[2] !== undefined) {
+    parts.push(`replay with { seed: ${seed[1]}, path: "${seed[2]}" }`);
+  }
+  return [{ message: `fast-check: ${parts.join(", ")}` }];
 }
 
 export function parseOutput(kind: ParserKind, output: string): Finding[] {
@@ -60,6 +93,8 @@ export function parseOutput(kind: ParserKind, output: string): Finding[] {
       return parseTsc(output);
     case "bun-test":
       return parseBunTest(output);
+    case "fast-check":
+      return parseFastCheck(output);
     case "raw":
       return [];
   }

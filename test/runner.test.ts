@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { runPipeline, spawnExecutor } from "../src/runner.ts";
+import { buildHint, runPipeline, spawnExecutor } from "../src/runner.ts";
 import type { GateExecutor, GateSpec, GateStatus } from "../src/types.ts";
 
 function gate(name: string, cost: number, extra: Partial<GateSpec> = {}): GateSpec {
@@ -90,6 +90,47 @@ describe("runPipeline", () => {
       fakeExec({}),
     );
     expect(verdict.gates.map((g) => g.gate)).toEqual(["a"]);
+  });
+});
+
+describe("buildHint", () => {
+  const result = (over: object) => ({
+    gate: "g",
+    status: "fail" as const,
+    durationMs: 0,
+    exitCode: 1,
+    findings: [],
+    outputTail: "",
+    ...over,
+  });
+
+  test("finding with file, line and remainder count", () => {
+    const hint = buildHint([
+      result({
+        findings: [
+          { file: "src/a.ts", line: 3, message: "boom" },
+          { message: "second" },
+          { message: "third" },
+        ],
+      }),
+    ]);
+    expect(hint).toBe("[g] src/a.ts:3, boom (+2 more)");
+  });
+
+  test("finding without file uses message only", () => {
+    expect(buildHint([result({ findings: [{ message: "boom" }] })])).toBe("[g] boom");
+  });
+
+  test("no findings falls back to note, then exit code", () => {
+    expect(buildHint([result({ note: "timed out after 5ms" })])).toBe(
+      "[g] timed out after 5ms",
+    );
+    expect(buildHint([result({})])).toBe("[g] exit code 1");
+  });
+
+  test("null when nothing blocks", () => {
+    expect(buildHint([result({ status: "pass", exitCode: 0 })])).toBeNull();
+    expect(buildHint([])).toBeNull();
   });
 });
 

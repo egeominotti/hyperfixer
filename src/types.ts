@@ -23,7 +23,7 @@ export interface GateResult {
   cached?: boolean;
 }
 
-export type ParserKind = "tsc" | "bun-test" | "raw";
+export type ParserKind = "tsc" | "bun-test" | "fast-check" | "raw";
 
 export interface GateSpec {
   name: string;

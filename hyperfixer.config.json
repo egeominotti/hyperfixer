@@ -5,23 +5,49 @@
     {
       "name": "lint",
       "cost": 5,
-      "command": ["bunx", "biome", "check", "."],
+      "command": [
+        "bunx",
+        "biome",
+        "check",
+        "."
+      ],
       "parser": "raw",
-      "inputs": ["src/**", "test/**", "biome.json"]
+      "inputs": [
+        "src/**",
+        "test/**",
+        "biome.json"
+      ]
     },
     {
       "name": "typecheck",
       "cost": 10,
-      "command": ["bunx", "tsc", "--noEmit", "--pretty", "false"],
+      "command": [
+        "bunx",
+        "tsc",
+        "--noEmit",
+        "--pretty",
+        "false"
+      ],
       "parser": "tsc",
-      "inputs": ["src/**", "test/**", "tsconfig.json"]
+      "inputs": [
+        "src/**",
+        "test/**",
+        "tsconfig.json"
+      ]
     },
     {
       "name": "typetest",
       "cost": 20,
-      "command": ["bun", "test", "test/types"],
+      "command": [
+        "bun",
+        "test",
+        "test/types"
+      ],
       "parser": "bun-test",
-      "inputs": ["src/**", "test/types/**"]
+      "inputs": [
+        "src/**",
+        "test/types/**"
+      ]
     },
     {
       "name": "unit",
@@ -35,21 +61,68 @@
         "test/changed.test.ts"
       ],
       "parser": "bun-test",
-      "inputs": ["src/**", "test/*.test.ts"]
+      "inputs": [
+        "src/**",
+        "test/*.test.ts"
+      ]
     },
     {
       "name": "pbt",
       "cost": 40,
-      "command": ["bun", "test", "test/property"],
+      "command": [
+        "bun",
+        "test",
+        "test/property"
+      ],
       "parser": "bun-test",
-      "inputs": ["src/**", "test/property/**"]
+      "inputs": [
+        "src/**",
+        "test/property/**"
+      ]
+    },
+    {
+      "name": "parity",
+      "cost": 50,
+      "command": [
+        "bun",
+        "scripts/parity.ts"
+      ],
+      "parser": "fast-check",
+      "inputs": [
+        "src/**",
+        "scripts/**"
+      ]
     },
     {
       "name": "e2e",
       "cost": 60,
-      "command": ["bun", "test", "test/e2e"],
+      "command": [
+        "bun",
+        "test",
+        "test/e2e"
+      ],
       "parser": "bun-test",
-      "inputs": ["src/**", "test/e2e/**"]
+      "inputs": [
+        "src/**",
+        "test/e2e/**"
+      ]
+    },
+    {
+      "name": "mutation",
+      "cost": 100,
+      "command": [
+        "bunx",
+        "stryker",
+        "run"
+      ],
+      "parser": "raw",
+      "optional": true,
+      "inputs": [
+        "src/**",
+        "test/**",
+        "stryker.conf.json"
+      ],
+      "timeoutMs": 600000
     }
   ]
 }

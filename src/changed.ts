@@ -7,9 +7,10 @@ export const CHANGED_TOKEN = "{changed}";
  * git. Uses -z (NUL separators): paths with spaces or unicode arrive verbatim,
  * no C-quoting to undo.
  */
-export function changedFiles(): string[] | null {
+export function changedFiles(cwd = "."): string[] | null {
   try {
     const res = Bun.spawnSync(["git", "status", "--porcelain", "-z"], {
+      cwd,
       stdout: "pipe",
       stderr: "ignore",
     });
