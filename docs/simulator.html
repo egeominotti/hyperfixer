@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Simulator · hyperfixer</title>
+<meta name="description" content="Interactive hyperfixer pipeline simulator: run gates, inject bugs, watch fail-fast and the machine-readable verdict.">
+<link rel="canonical" href="https://egeominotti.github.io/hyperfixer/simulator.html">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="hyperfixer">
+<meta property="og:title" content="Simulator · hyperfixer">
+<meta property="og:description" content="Interactive hyperfixer pipeline simulator: run gates, inject bugs, watch fail-fast and the machine-readable verdict.">
+<meta property="og:url" content="https://egeominotti.github.io/hyperfixer/simulator.html">
+<meta property="og:image" content="https://egeominotti.github.io/hyperfixer/assets/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="stylesheet" href="style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛡️</text></svg>">
+<style>
+  .controls { display: flex; flex-wrap: wrap; gap: 12px 24px; margin: 18px 0; align-items: center; }
+  .controls label { display: flex; align-items: center; gap: 8px; cursor: pointer; color: var(--ink-soft); font-size: 14px; }
+  .controls input[type="checkbox"] { accent-color: var(--stamp); width: 16px; height: 16px; }
+  .controls input[type="range"] { accent-color: var(--stamp); width: 140px; }
+  button {
+    font-family: var(--mono); font-size: 15px; font-weight: 700; letter-spacing: 2px;
+    background: var(--stamp); color: #fff; border: none; padding: 12px 28px; cursor: pointer;
+  }
+  button:hover, button:focus-visible { filter: brightness(1.1); outline: 2px solid var(--ink); }
+  button:disabled { opacity: 0.5; cursor: wait; }
+  #term { min-height: 220px; }
+  .exit0 { color: var(--pass); font-weight: 700; }
+  .exit1 { color: var(--stamp); font-weight: 700; }
+  details { margin: 14px 0; }
+  summary { cursor: pointer; color: var(--ink-dim); font-size: 13px; letter-spacing: 2px; text-transform: uppercase; }
+</style>
+</head>
+<body>
+<div class="frame">
+<nav>
+  <a class="brand" href="index.html">HYPERFIXER</a>
+  <a href="index.html">Home</a>
+  <a href="guide.html">Guide</a>
+  <a href="cli.html">CLI</a>
+  <a href="config.html">Config</a>
+  <a href="agents.html">Agents</a>
+  <a href="simulator.html" aria-current="page">Simulator</a>
+  <a href="https://github.com/egeominotti/hyperfixer">GitHub</a>
+</nav>
+
+<p class="eyebrow">Interactive · Sheet 05</p>
+<h1>SIMULATOR</h1>
+<p>This is exactly how hyperfixer behaves on a real project: gates run in cost order, equal costs in parallel, fail-fast blocks later groups, cached gates return instantly, and the verdict tells the agent what to fix. Inject a bug and run.</p>
+
+<div class="controls">
+  <label><input type="checkbox" id="bug-type"> inject type error</label>
+  <label><input type="checkbox" id="bug-test"> inject failing test</label>
+  <label><input type="checkbox" id="cache" checked> warm cache</label>
+  <label>max-cost <input type="range" id="maxcost" min="0" max="100" value="100" step="5"> <span id="maxcost-v">100</span></label>
+  <button id="run">RUN</button>
+</div>
+
+<pre id="term" aria-live="polite"><span class="dim">$ hyperfixer run</span></pre>
+
+<details>
+  <summary>verdict.json</summary>
+  <pre id="verdict" class="dim">run the pipeline first</pre>
+</details>
+
+<footer>
+  <span>HYPERFIXER · MIT · <a href="llms.txt">llms.txt</a> · <a href="llms-full.txt">llms-full.txt</a></span>
+  <span><a href="https://github.com/egeominotti/hyperfixer">github.com/egeominotti/hyperfixer</a></span>
+</footer>
+</div>
+
+<script>
+const GATES = [
+  { name: "lint", cost: 5, ms: 70 },
+  { name: "typecheck", cost: 10, ms: 500, failsOn: "bug-type",
+    finding: "[typecheck] src/service.ts:42, Type 'string' is not assignable to type 'number'." },
+  { name: "typetest", cost: 20, ms: 18 },
+  { name: "unit", cost: 30, ms: 110, failsOn: "bug-test",
+    finding: "[unit] test/service.test.ts:12, test failed: service > computes totals" },
+  { name: "pbt", cost: 40, ms: 40 },
+  { name: "e2e", cost: 60, ms: 800 },
+];
+const $ = (id) => document.getElementById(id);
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+$("maxcost").addEventListener("input", () => { $("maxcost-v").textContent = $("maxcost").value; });
+
+$("run").addEventListener("click", async () => {
+  $("run").disabled = true;
+  try {
+  const cache = $("cache").checked;
+  const maxCost = Number($("maxcost").value);
+  const term = $("term");
+  term.innerHTML = '<span class="dim">$ hyperfixer run' + (maxCost < 100 ? " --max-cost " + maxCost : "") + "</span>\n";
+  const active = GATES.filter((g) => g.cost <= maxCost);
+  const results = [];
+  let blocked = false;
+  const start = performance.now();
+  for (const g of active) {
+    if (blocked) { results.push({ gate: g.name, status: "skip", durationMs: 0, note: "earlier gate failed" });
+      term.innerHTML += '<span class="dim">- ' + g.name + ", earlier gate failed</span>\n"; continue; }
+    const fails = g.failsOn && $(g.failsOn).checked;
+    const hit = cache && !fails;
+    if (!reduced) await sleep(hit ? 40 : Math.min(g.ms, 600));
+    const ms = hit ? 0 : g.ms;
+    if (fails) {
+      results.push({ gate: g.name, status: "fail", durationMs: ms, findings: [{ message: g.finding }] });
+      term.innerHTML += '<span class="fail">✗</span> <strong>' + g.name + '</strong> <span class="dim">(' + ms + "ms)</span>\n    " + g.finding + "\n";
+      blocked = true;
+    } else {
+      results.push({ gate: g.name, status: "pass", durationMs: ms, cached: hit || undefined });
+      term.innerHTML += '<span class="pass">✓</span> ' + g.name + ' <span class="dim">(' + ms + "ms)" + (hit ? ", cache hit" : "") + "</span>\n";
+    }
+  }
+  const failed = results.find((r) => r.status === "fail");
+  const executed = results.some((r) => r.status !== "skip");
+  const ok = !failed && executed;
+  const hint = failed ? failed.findings[0].message
+    : executed ? null : "[pipeline] no gates executed, check gates config and --max-cost";
+  const total = Math.round(performance.now() - start);
+  term.innerHTML += ok
+    ? '\n<span class="exit0">OK</span><span class="dim">, all gates passed in ' + total + "ms</span>\n<span class=\"dim\">exit 0</span>"
+    : '\n<span class="exit1">FAIL</span>' + (failed ? " at gate <strong>" + failed.gate + "</strong>" : "") + ", " + hint + '\n<span class="dim">exit 1, agent reads the hint, fixes, re-runs</span>';
+  $("verdict").textContent = JSON.stringify(
+    { ok, generatedAt: new Date().toISOString(), failedGate: failed ? failed.gate : null, hint, durationMs: total, gates: results },
+    null, 2);
+  $("verdict").classList.remove("dim");
+  } finally {
+    $("run").disabled = false;
+  }
+});
+</script>
+</body>
+</html>

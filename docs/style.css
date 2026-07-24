@@ -171,8 +171,17 @@ footer {
 footer a { color: var(--ink-dim); }
 
 @media (max-width: 720px) {
-  .frame { margin: 10px; padding: 24px 20px 40px; }
-  h1 { font-size: 30px; }
+  body { font-size: 14px; }
+  .frame { margin: 8px; padding: 20px 14px 32px; outline-offset: 4px; }
+  h1 { font-size: 26px; letter-spacing: 2px; }
+  h2 { font-size: 16px; }
+  nav { gap: 4px 14px; font-size: 12px; }
+  nav a { padding: 4px 0; }
+  pre { padding: 12px; font-size: 12.5px; }
+  table { display: block; overflow-x: auto; white-space: nowrap; -webkit-overflow-scrolling: touch; }
+  td, th { white-space: normal; min-width: 110px; }
+  .stamp { padding: 8px 16px; letter-spacing: 2px; font-size: 14px; }
+  footer { flex-direction: column; }
 }
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; }
