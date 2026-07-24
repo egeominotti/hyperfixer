@@ -1,13 +1,40 @@
 {
   "name": "hyperfixer",
   "version": "0.1.2",
-  "description": "Layered verification pipeline for AI-agent-written code: cost-ordered gates, fail-fast, machine-readable verdicts for self-correction loops",
+  "description": "Layered verification pipeline for AI-agent-written code: cost-ordered gates, fail-fast, machine-readable verdicts for self-correction loops. Requires Bun.",
   "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/egeominotti/hyperfixer.git"
+  },
+  "homepage": "https://github.com/egeominotti/hyperfixer#readme",
+  "bugs": "https://github.com/egeominotti/hyperfixer/issues",
+  "keywords": [
+    "ai-agents",
+    "verification",
+    "quality-gates",
+    "testing",
+    "property-based-testing",
+    "mutation-testing",
+    "bun",
+    "cli",
+    "claude",
+    "codex"
+  ],
   "bin": {
     "hyperfixer": "./src/cli.ts"
   },
   "exports": {
     ".": "./src/index.ts"
+  },
+  "files": [
+    "src",
+    "assets/cover.svg",
+    "CHANGELOG.md"
+  ],
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "test": "bun test",

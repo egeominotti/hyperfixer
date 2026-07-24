@@ -2,12 +2,54 @@
   "failFast": true,
   "outDir": ".hyperfixer",
   "gates": [
-    { "name": "lint", "cost": 5, "command": ["bunx", "biome", "check", "."], "parser": "raw" },
-    { "name": "typecheck", "cost": 10, "command": ["bunx", "tsc", "--noEmit", "--pretty", "false"], "parser": "tsc" },
-    { "name": "typetest", "cost": 20, "command": ["bun", "test", "test/types"], "parser": "bun-test" },
-    { "name": "unit", "cost": 30, "command": ["bun", "test", "test/runner.test.ts", "test/parsers.test.ts"], "parser": "bun-test" },
-    { "name": "pbt", "cost": 40, "command": ["bun", "test", "test/property"], "parser": "bun-test" },
-    { "name": "e2e", "cost": 60, "command": ["bun", "test", "test/e2e"], "parser": "bun-test" },
-    { "name": "mutation", "cost": 100, "enabled": false, "optional": true }
+    {
+      "name": "lint",
+      "cost": 5,
+      "command": ["bunx", "biome", "check", "."],
+      "parser": "raw",
+      "inputs": ["src/**", "test/**", "biome.json"]
+    },
+    {
+      "name": "typecheck",
+      "cost": 10,
+      "command": ["bunx", "tsc", "--noEmit", "--pretty", "false"],
+      "parser": "tsc",
+      "inputs": ["src/**", "test/**", "tsconfig.json"]
+    },
+    {
+      "name": "typetest",
+      "cost": 20,
+      "command": ["bun", "test", "test/types"],
+      "parser": "bun-test",
+      "inputs": ["src/**", "test/types/**"]
+    },
+    {
+      "name": "unit",
+      "cost": 30,
+      "command": [
+        "bun",
+        "test",
+        "test/runner.test.ts",
+        "test/parsers.test.ts",
+        "test/cache.test.ts",
+        "test/changed.test.ts"
+      ],
+      "parser": "bun-test",
+      "inputs": ["src/**", "test/*.test.ts"]
+    },
+    {
+      "name": "pbt",
+      "cost": 40,
+      "command": ["bun", "test", "test/property"],
+      "parser": "bun-test",
+      "inputs": ["src/**", "test/property/**"]
+    },
+    {
+      "name": "e2e",
+      "cost": 60,
+      "command": ["bun", "test", "test/e2e"],
+      "parser": "bun-test",
+      "inputs": ["src/**", "test/e2e/**"]
+    }
   ]
 }

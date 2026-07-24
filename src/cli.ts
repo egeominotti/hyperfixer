@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+import { cmdClaudeHook, cmdInstallClaude } from "./claude.ts";
 import { cmdDoctor, cmdHint, cmdInit, cmdRun, type RunFlags } from "./commands.ts";
 import { CONFIG_FILE } from "./config.ts";
 import { cmdInstallHooks } from "./hooks.ts";
@@ -11,6 +12,8 @@ Usage:
   hyperfixer hint             print first actionable fix from last verdict
   hyperfixer doctor           check toolchain and config health
   hyperfixer install-hooks    install git pre-commit and pre-push hooks
+  hyperfixer install-claude   install Claude Code PreToolUse hook
+  hyperfixer claude-hook      internal, PreToolUse entry point (stdin JSON)
 
 Run flags:
   --json                machine-readable verdict on stdout
@@ -18,6 +21,8 @@ Run flags:
   --config <path>       config file (default ${CONFIG_FILE})
   --only <a,b>          run only the named gates
   --max-cost <n>        run only gates with cost <= n
+  --changed             expand {changed} in commands to git-changed files
+  --no-cache            ignore and do not update the input-hash cache
   --no-fail-fast        run all gates even after a failure
   --out-dir <dir>       verdict output directory (default .hyperfixer)
 
@@ -32,6 +37,8 @@ function parseRunFlags(args: string[]): RunFlags | null {
     noFailFast: false,
     outDir: null,
     maxCost: null,
+    noCache: false,
+    changed: false,
   };
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
@@ -50,6 +57,12 @@ function parseRunFlags(args: string[]): RunFlags | null {
         break;
       case "--no-fail-fast":
         flags.noFailFast = true;
+        break;
+      case "--no-cache":
+        flags.noCache = true;
+        break;
+      case "--changed":
+        flags.changed = true;
         break;
       case "--config": {
         const v = next();
@@ -112,6 +125,10 @@ async function main(argv: string[]): Promise<number> {
       return cmdDoctor(findConfigFlag(rest));
     case "install-hooks":
       return cmdInstallHooks();
+    case "install-claude":
+      return cmdInstallClaude();
+    case "claude-hook":
+      return cmdClaudeHook(findConfigFlag(rest));
     case undefined:
     case "--help":
     case "-h":

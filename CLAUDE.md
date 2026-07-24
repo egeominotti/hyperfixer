@@ -29,10 +29,14 @@ src/
   types.ts      # all shared types (GateSpec, GateResult, Verdict, Finding)
   config.ts     # config load/validate + DEFAULT_GATES (the canonical gate list)
   parsers.ts    # tsc / bun-test output to structured Finding[]
-  runner.ts     # pipeline: cost-sort, execute with timeout, fail-fast, build hint
+  runner.ts     # pipeline: cost groups in parallel, timeout, fail-fast, hint
+  cache.ts      # input-hash cache (mtime based), caching executor wrapper
+  changed.ts    # {changed} token expansion from git status
   report.ts     # human rendering (colors) + verdict.json read/write with validation
   colors.ts     # minimal ANSI helpers (NO_COLOR / TTY aware)
   commands.ts   # CLI command implementations (run, init, hint, doctor)
+  initgen.ts    # smart init: stack detection, tailored gate list
+  claude.ts     # Claude Code integration (install-claude, claude-hook)
   hooks.ts      # git hook installer (pre-commit, pre-push)
   cli.ts        # entry point: arg parsing + dispatch only
   index.ts      # public API surface

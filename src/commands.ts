@@ -1,7 +1,10 @@
+import { cachingExecutor, loadCache, saveCache } from "./cache.ts";
+import { applyChanged, changedFiles } from "./changed.ts";
 import { bold, dim, green, red } from "./colors.ts";
 import { CONFIG_FILE, defaultConfig, loadConfig } from "./config.ts";
+import { detectGates } from "./initgen.ts";
 import { readVerdict, renderHuman, writeVerdict } from "./report.ts";
-import { runPipeline } from "./runner.ts";
+import { runPipeline, spawnExecutor } from "./runner.ts";
 import type { HyperfixerConfig } from "./types.ts";
 
 const STALE_AFTER_MS = 10 * 60_000;
@@ -14,6 +17,8 @@ export interface RunFlags {
   noFailFast: boolean;
   outDir: string | null;
   maxCost: number | null;
+  noCache: boolean;
+  changed: boolean;
 }
 
 export async function cmdRun(flags: RunFlags): Promise<number> {
@@ -46,8 +51,19 @@ export async function cmdRun(flags: RunFlags): Promise<number> {
   }
   if (flags.noFailFast) config.failFast = false;
   if (flags.outDir !== null) config.outDir = flags.outDir;
+  if (flags.changed) {
+    const files = changedFiles();
+    if (files === null) {
+      console.error(red("--changed requires a git repository"));
+      return 2;
+    }
+    config.gates = applyChanged(config.gates, files);
+  }
 
-  const verdict = await runPipeline(config);
+  const cache = flags.noCache ? null : await loadCache(config.outDir);
+  const exec = cache === null ? spawnExecutor : cachingExecutor(spawnExecutor, cache);
+  const verdict = await runPipeline(config, exec);
+  if (cache !== null) await saveCache(config.outDir, cache);
   const path = await writeVerdict(verdict, config.outDir);
   if (flags.json) {
     console.log(JSON.stringify(verdict, null, 2));
@@ -63,7 +79,14 @@ export async function cmdInit(): Promise<number> {
     console.error(`${CONFIG_FILE} already exists, not overwriting`);
     return 2;
   }
-  await Bun.write(CONFIG_FILE, `${JSON.stringify(defaultConfig(), null, 2)}\n`);
+  const { gates, detected } = detectGates();
+  const config: HyperfixerConfig = { ...defaultConfig(), gates };
+  await Bun.write(CONFIG_FILE, `${JSON.stringify(config, null, 2)}\n`);
+  console.log(
+    detected.length > 0
+      ? `detected: ${detected.join(", ")}`
+      : "nothing detected, using default gates",
+  );
   console.log(`wrote ${bold(CONFIG_FILE)}, enable/adjust gates, then: hyperfixer run`);
   return 0;
 }

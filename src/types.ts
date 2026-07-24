@@ -19,6 +19,8 @@ export interface GateResult {
   outputTail: string;
   /** Why the gate was skipped or errored, when applicable. */
   note?: string;
+  /** True when this result was served from the input-hash cache. */
+  cached?: boolean;
 }
 
 export type ParserKind = "tsc" | "bun-test" | "raw";
@@ -35,6 +37,11 @@ export interface GateSpec {
   enabled?: boolean;
   /** Kill the gate process after this many ms. Default 600000 (10 min). */
   timeoutMs?: number;
+  /**
+   * Glob patterns of the files this gate depends on. Only gates that declare
+   * inputs are cacheable: unchanged inputs let a previous pass be reused.
+   */
+  inputs?: string[];
 }
 
 export interface HyperfixerConfig {

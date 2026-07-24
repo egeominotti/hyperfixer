@@ -57,19 +57,23 @@ describe("verdict invariants", () => {
     );
   });
 
-  test("failFast: everything after first blocking gate is skipped", async () => {
+  test("failFast: every gate in a later cost group than the first blocking gate is skipped", async () => {
     await fc.assert(
       fc.asyncProperty(gatesArb, async ({ gates, statuses }) => {
         const verdict = await runPipeline(
           { gates, failFast: true, outDir: ".hyperfixer" },
           execFrom(statuses),
         );
-        const idx = verdict.gates.findIndex(
+        const cost = new Map(gates.map((g) => [g.name, g.cost]));
+        const blocking = verdict.gates.find(
           (r) => r.status === "fail" || r.status === "error",
         );
-        if (idx === -1) return;
-        for (const later of verdict.gates.slice(idx + 1)) {
-          expect(later.status).toBe("skip");
+        if (!blocking) return;
+        const blockingCost = cost.get(blocking.gate) ?? 0;
+        for (const r of verdict.gates) {
+          if ((cost.get(r.gate) ?? 0) > blockingCost) {
+            expect(r.status).toBe("skip");
+          }
         }
       }),
     );

@@ -122,16 +122,31 @@ export async function runPipeline(
     .filter((g) => g.enabled !== false)
     .sort((a, b) => a.cost - b.cost);
 
+  // Gates with equal cost form a group and run concurrently; groups run in
+  // cost order and fail-fast blocks later groups, never same-group siblings.
   const results: GateResult[] = [];
   let blocked = false;
-  for (const gate of gates) {
+  let i = 0;
+  while (i < gates.length) {
+    const head = gates[i];
+    if (head === undefined) break;
+    const group: GateSpec[] = [];
+    while (i < gates.length) {
+      const g = gates[i];
+      if (g === undefined || g.cost !== head.cost) break;
+      group.push(g);
+      i++;
+    }
     if (blocked) {
-      results.push(skippedResult(gate, "earlier gate failed"));
+      for (const g of group) results.push(skippedResult(g, "earlier gate failed"));
       continue;
     }
-    const result = await exec(gate);
-    results.push(result);
-    if (config.failFast && (result.status === "fail" || result.status === "error")) {
+    const groupResults = await Promise.all(group.map((g) => exec(g)));
+    results.push(...groupResults);
+    if (
+      config.failFast &&
+      groupResults.some((r) => r.status === "fail" || r.status === "error")
+    ) {
       blocked = true;
     }
   }

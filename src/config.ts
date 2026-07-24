@@ -106,5 +106,8 @@ function normalizeGate(raw: unknown, source: string): GateSpec {
   if (typeof g.timeoutMs === "number" && g.timeoutMs > 0) {
     spec.timeoutMs = g.timeoutMs;
   }
+  if (Array.isArray(g.inputs) && g.inputs.every((p) => typeof p === "string")) {
+    spec.inputs = g.inputs;
+  }
   return spec;
 }

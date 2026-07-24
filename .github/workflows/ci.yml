@@ -27,6 +27,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      id-token: write
     concurrency:
       group: release
       cancel-in-progress: false
@@ -59,3 +60,14 @@ jobs:
           git commit -m "chore: release ${NEW} [skip ci]"
           git tag -a "$NEW" -m "$NEW"
           git push --atomic origin main "refs/tags/$NEW"
+      - name: Publish to npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "$NODE_AUTH_TOKEN" ]; then
+            echo "NPM_TOKEN secret not set, skipping npm publish"
+            exit 0
+          fi
+          npm config set //registry.npmjs.org/:_authToken "$NODE_AUTH_TOKEN"
+          npm publish --provenance --access public

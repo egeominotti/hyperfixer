@@ -137,6 +137,8 @@ describe("e2e: hint", () => {
   });
 
   test("stale verdict triggers stderr warning", async () => {
+    await writeConfig(dir, [{ name: "a", cost: 1, command: ["true"] }]);
+    await cli(dir, "run", "--quiet");
     const path = join(dir, ".hyperfixer/verdict.json");
     const verdict = await Bun.file(path).json();
     verdict.generatedAt = "2020-01-01T00:00:00.000Z";

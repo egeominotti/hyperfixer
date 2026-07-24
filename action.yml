@@ -1,0 +1,38 @@
+name: "hyperfixer"
+description: "Layered verification pipeline for AI-agent code, cost-ordered gates, fail-fast, machine-readable verdicts"
+branding:
+  icon: "shield"
+  color: "blue"
+
+inputs:
+  config:
+    description: "Path to hyperfixer.config.json"
+    required: false
+    default: "hyperfixer.config.json"
+  max-cost:
+    description: "Run only gates with cost <= this value"
+    required: false
+    default: ""
+  working-directory:
+    description: "Directory to run in"
+    required: false
+    default: "."
+
+runs:
+  using: "composite"
+  steps:
+    - uses: oven-sh/setup-bun@v2
+      with:
+        bun-version: latest
+    - name: Run hyperfixer
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        HF_CONFIG: ${{ inputs.config }}
+        HF_MAX_COST: ${{ inputs.max-cost }}
+      run: |
+        ARGS=(run --config "$HF_CONFIG")
+        if [ -n "$HF_MAX_COST" ]; then
+          ARGS+=(--max-cost "$HF_MAX_COST")
+        fi
+        bun "$GITHUB_ACTION_PATH/src/cli.ts" "${ARGS[@]}"

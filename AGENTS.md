@@ -38,10 +38,15 @@ bun install          # Bun >= 1.1 required; there is no Node/npm path
 | `src/types.ts` | Shared types | Verdict shape is public API |
 | `src/config.ts` | Config load/validation, `DEFAULT_GATES` | Add new gates here |
 | `src/parsers.ts` | Tool output to `Finding[]` | New parsers need fixture tests |
-| `src/runner.ts` | Pipeline execution, timeout, fail-fast, hint | Executor injected for testability |
+| `src/runner.ts` | Pipeline execution, parallel cost groups, timeout, fail-fast, hint | Executor injected for testability |
+| `src/cache.ts` | Input-hash cache, caching executor | Only gates with `inputs` are cached |
+| `src/changed.ts` | `{changed}` expansion from git status | |
 | `src/report.ts` | Human + JSON output, verdict validation | |
 | `src/commands.ts` | CLI commands | |
+| `src/initgen.ts` | Smart init stack detection | |
+| `src/claude.ts` | Claude Code PreToolUse integration | claude-hook must never block non-git commands |
 | `src/hooks.ts` | Git hook installer | Never clobbers foreign hooks |
+| `action.yml` | Composite GitHub Action | Runs the CLI from the action checkout, zero install |
 | `src/cli.ts` | Arg parsing + dispatch only | Keep logic out of here |
 | `test/property/` | Verdict invariants (fast-check) | Must always pass |
 | `test/types/` | expect-type + `@ts-expect-error` | Update on API changes |

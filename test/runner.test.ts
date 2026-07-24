@@ -33,6 +33,21 @@ describe("runPipeline", () => {
     expect(order).toEqual(["a", "b", "c"]);
   });
 
+  test("same-cost gates run as one group, a failure does not skip siblings", async () => {
+    const verdict = await runPipeline(
+      {
+        ...baseConfig,
+        gates: [gate("a", 1), gate("b", 1), gate("c", 2)],
+      },
+      fakeExec({ a: "fail" }),
+    );
+    expect(verdict.gates.map((g) => [g.gate, g.status])).toEqual([
+      ["a", "fail"],
+      ["b", "pass"],
+      ["c", "skip"],
+    ]);
+  });
+
   test("fail-fast skips later gates", async () => {
     const verdict = await runPipeline(
       { ...baseConfig, gates: [gate("a", 1), gate("b", 2), gate("c", 3)] },

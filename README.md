@@ -36,6 +36,16 @@ Agent-written code fails in layers, and each layer needs a different detector:
 
 Running everything on every change is wasteful; running only unit tests misses whole failure classes. hyperfixer orders gates by cost, stops at the first failure, and tells the agent exactly where to look, so the feedback loop is fast *and* honest.
 
+Fast in practice: gates with equal cost run in parallel, and gates that declare `inputs` are cached by input hash, an unchanged project re-verifies in milliseconds:
+
+```
+✓ lint (0ms), cache hit
+✓ typecheck (0ms), cache hit
+✓ e2e (0ms), cache hit
+
+OK, all gates passed in 2ms
+```
+
 ## Requirements
 
 - [Bun](https://bun.sh) >= 1.1
@@ -43,21 +53,25 @@ Running everything on every change is wasteful; running only unit tests misses w
 ## Quick start
 
 ```bash
-bun add -d hyperfixer        # or clone this repo
-bunx hyperfixer init         # writes hyperfixer.config.json
-bunx hyperfixer doctor       # verify toolchain
-bunx hyperfixer run          # run the pipeline
+bun add -d hyperfixer          # from npm
+bunx hyperfixer init           # detects your stack, writes hyperfixer.config.json
+bunx hyperfixer doctor         # verify toolchain
+bunx hyperfixer run            # run the pipeline
 bunx hyperfixer install-hooks  # enforce on git commit and push
 ```
+
+`init` inspects the project (Biome or ESLint, tsconfig, Bun or vitest or npm test, test directories) and generates a tailored gate list instead of a generic default.
 
 ## CLI
 
 ```
 hyperfixer run [flags]      run gates in cost order, write verdict, exit 0/1
-hyperfixer init             write default hyperfixer.config.json
+hyperfixer init             detect the stack, write hyperfixer.config.json
 hyperfixer hint             print first actionable fix from last verdict
 hyperfixer doctor           check toolchain and config health
 hyperfixer install-hooks    install git pre-commit and pre-push hooks
+hyperfixer install-claude   install Claude Code PreToolUse hook
+hyperfixer claude-hook      internal, PreToolUse entry point (stdin JSON)
 
 Run flags:
   --json                machine-readable verdict on stdout
@@ -65,6 +79,8 @@ Run flags:
   --config <path>       config file (default hyperfixer.config.json)
   --only <a,b>          run only the named gates
   --max-cost <n>        run only gates with cost <= n
+  --changed             expand {changed} in commands to git-changed files
+  --no-cache            ignore and do not update the input-hash cache
   --no-fail-fast        run all gates even after a failure
   --out-dir <dir>       verdict output directory (default .hyperfixer)
 ```
@@ -97,8 +113,13 @@ Exit codes: `0` all gates pass, `1` a gate failed, `2` usage or config error. Th
 | `optional` | Skip (instead of error) when the command cannot start |
 | `enabled` | `false` removes the gate from the pipeline |
 | `timeoutMs` | Kill the gate after this many ms (default 600000) |
+| `inputs` | Glob patterns this gate depends on; declaring them enables input-hash caching |
 
-Gate names must be unique; duplicates are rejected at load time. A hanging gate cannot wedge an unattended agent loop: it is killed at `timeoutMs` and reported as `error`.
+Gate names must be unique; duplicates are rejected at load time. A hanging gate cannot wedge an unattended agent loop: it is killed at `timeoutMs` (SIGTERM, then SIGKILL) and reported as `error`. Gates with equal `cost` run concurrently as a group; fail-fast blocks later groups only.
+
+**Caching**: a gate that declares `inputs` stores its passing result keyed by a hash of command + file metadata (path, size, mtime). Unchanged inputs mean an instant cache hit; failures are never cached; `--no-cache` bypasses it.
+
+**Changed-only mode**: put `{changed}` in a gate command and run with `--changed`; the token expands to the files git reports as modified, and the gate is skipped entirely when the tree is clean.
 
 ## Works with any agent
 
@@ -122,22 +143,22 @@ hyperfixer install-hooks
 
 The hooks are plain `sh`, refuse to overwrite hooks they did not write, and print the hint on failure so the blocked agent knows what to fix.
 
-**Claude Code**, blocking enforcement via [PreToolUse hook](https://docs.anthropic.com/en/docs/claude-code/hooks) in `.claude/settings.json`:
+**Claude Code**, one command:
 
-```json
-{
-  "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "Bash(git commit*)",
-        "hooks": [{ "type": "command", "command": "bunx hyperfixer run --quiet || { bunx hyperfixer hint >&2; exit 2; }" }]
-      }
-    ]
-  }
-}
+```bash
+hyperfixer install-claude
 ```
 
-Exit 2 blocks the tool call and feeds the hint back to the agent, which fixes and retries.
+This writes (or merges into) `.claude/settings.json` a [PreToolUse hook](https://docs.anthropic.com/en/docs/claude-code/hooks) that intercepts every `git commit` and `git push` the agent attempts, runs the pipeline, and on failure blocks the call with the hint fed back to the agent, which fixes and retries. Non-git commands are never touched.
+
+**GitHub Actions**, three lines in anyone's CI:
+
+```yaml
+- uses: actions/checkout@v4
+- uses: egeominotti/hyperfixer@main
+  with:
+    max-cost: "50"   # optional, config: and working-directory: also available
+```
 
 ## The verdict
 
