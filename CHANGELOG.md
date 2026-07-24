@@ -4,6 +4,10 @@ All notable changes to hyperfixer are documented here. The format follows [Keep 
 
 ## [Unreleased]
 
+## [0.1.13] - 2026-07-24
+
+- fix: close false-green paths in cache, config, lock and runtime
+
 ## [0.1.12] - 2026-07-24
 
 - fix: lock ownership, exit tie-break, fix under lock, docs v2
