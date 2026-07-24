@@ -4,6 +4,10 @@ All notable changes to hyperfixer are documented here. The format follows [Keep 
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-07-24
+
+- feat: cache, parallel gates, changed mode, agent integrations
+
 ## [0.1.2] - 2026-07-24
 
 - fix: push release tag explicitly and atomically
