@@ -37,7 +37,8 @@ hyperfixer orders gates by cost, stops at the first failure, and tells the agent
 
 Commands:
 
-- `hyperfixer run [flags]`: run gates in cost order, write verdict, exit 0/1
+- `hyperfixer run [flags]`: run gates in cost order, write verdict
+- `hyperfixer fix [flags]`: run every enabled gate's fixCommand (biome --write, eslint --fix), then verify with the normal pipeline
 - `hyperfixer init`: detect the stack, write hyperfixer.config.json
 - `hyperfixer hint`: print first actionable fix from last verdict, warns on stderr when the verdict is older than 10 minutes
 - `hyperfixer doctor`: check toolchain and config health
@@ -60,8 +61,9 @@ Run flags:
 Exit codes (strict contract, branch on these):
 
 - 0: all gates pass
-- 1: a gate failed, or zero gates executed (an empty pipeline never masquerades as green)
-- 2: usage or config error (a broken config is never exit 1)
+- 1: a gate failed, the code is wrong, read the hint
+- 2: setup problem: config error, empty pipeline (zero gates executed), or another run holds the lock
+- 3: gate infrastructure failed (timeout, tool crash), do NOT edit code
 
 ## Configuration
 
@@ -86,11 +88,12 @@ Gate fields:
 
 - `cost` (number, required): gates run in ascending order, equal costs run concurrently as a group, --max-cost filters on it
 - `command` (string[]): argv array, no shell; omit to skip the gate
-- `parser`: "tsc" | "bun-test" | "fast-check" | "raw", extracts structured findings from output; fast-check failures surface counterexample, seed and path for exact replay
+- `parser`: "tsc" | "bun-test" | "fast-check" | "eslint-json" | "findings-json" | "raw", extracts structured findings from output; fast-check failures surface counterexample, seed and path for exact replay; findings-json is the generic protocol, any tool printing a JSON array of {file, line, column, code, message} integrates without a dedicated parser
 - `optional` (boolean): skip instead of error when the command cannot start
 - `enabled` (boolean): false removes the gate from the pipeline
 - `timeoutMs` (number): kill the gate after this many ms, default 600000, SIGTERM then SIGKILL after 5s
-- `inputs` (string[]): glob patterns the gate depends on, declaring them enables caching
+- `inputs` (string[]): glob patterns the gate depends on, declaring them enables caching and content-based staleness
+- `fixCommand` (string[]): autofix argv run by `hyperfixer fix` before re-verifying
 
 Rules: gate names must be unique (duplicates rejected at load). Failures are never cached. A gate command containing the {changed} token, run with --changed, gets the token expanded to git-changed files (staged, unstaged, untracked, NUL-safe) and is disabled when the tree is clean.
 
@@ -99,6 +102,7 @@ Rules: gate names must be unique (duplicates rejected at load). Failures are nev
     {
       "ok": false,
       "generatedAt": "2026-07-24T10:30:00.000Z",
+      "inputsFingerprint": "sha256…",
       "failedGate": "typecheck",
       "hint": "[typecheck] src/service.ts:42, Type 'string' is not assignable…",
       "durationMs": 533,

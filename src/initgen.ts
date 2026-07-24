@@ -36,6 +36,7 @@ export function detectGates(): DetectedConfig {
       name: "lint",
       cost: 5,
       command: [x, "biome", "check", "."],
+      fixCommand: [x, "biome", "check", "--write", "."],
       parser: "raw",
       inputs: [...SRC_INPUTS, "biome.json", "biome.jsonc"],
     });
@@ -53,8 +54,9 @@ export function detectGates(): DetectedConfig {
     gates.push({
       name: "lint",
       cost: 5,
-      command: [x, "eslint", "."],
-      parser: "raw",
+      command: [x, "eslint", ".", "--format", "json"],
+      fixCommand: [x, "eslint", ".", "--fix"],
+      parser: "eslint-json",
       inputs: SRC_INPUTS,
     });
     detected.push("eslint");

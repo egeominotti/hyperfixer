@@ -23,7 +23,13 @@ export interface GateResult {
   cached?: boolean;
 }
 
-export type ParserKind = "tsc" | "bun-test" | "fast-check" | "raw";
+export type ParserKind =
+  | "tsc"
+  | "bun-test"
+  | "fast-check"
+  | "eslint-json"
+  | "findings-json"
+  | "raw";
 
 export interface GateSpec {
   name: string;
@@ -42,6 +48,8 @@ export interface GateSpec {
    * inputs are cacheable: unchanged inputs let a previous pass be reused.
    */
   inputs?: string[];
+  /** Autofix command run by "hyperfixer fix" before re-verifying. */
+  fixCommand?: string[];
 }
 
 export interface HyperfixerConfig {
@@ -56,6 +64,11 @@ export interface Verdict {
   ok: boolean;
   /** ISO timestamp of when this verdict was produced. Guards against stale reads. */
   generatedAt: string;
+  /**
+   * Combined content hash of every gate's inputs at run time. hint compares
+   * it against the current tree: a mismatch proves the verdict is stale.
+   */
+  inputsFingerprint?: string;
   /** Name of the first gate that failed or errored, null when ok. */
   failedGate: string | null;
   gates: GateResult[];

@@ -4,14 +4,7 @@
  */
 import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import {
-  type Dirent,
-  existsSync,
-  mkdirSync,
-  readdirSync,
-  readFileSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { StringDecoder } from "node:string_decoder";
 
@@ -33,14 +26,29 @@ export function spawnCapture(
       reject(new Error("empty command"));
       return;
     }
-    const child = spawn(cmd, args, { stdio: ["ignore", "pipe", "pipe"] });
+    // detached puts the gate in its own process group on POSIX, so the
+    // timeout can kill the whole tree, grandchildren included.
+    const child = spawn(cmd, args, {
+      stdio: ["ignore", "pipe", "pipe"],
+      detached: process.platform !== "win32",
+    });
+    const killTree = (signal: NodeJS.Signals) => {
+      const pid = child.pid;
+      if (pid !== undefined && process.platform !== "win32") {
+        try {
+          process.kill(-pid, signal);
+          return;
+        } catch {}
+      }
+      child.kill(signal);
+    };
     let timedOut = false;
     let killTimer: ReturnType<typeof setTimeout> | undefined;
     const timer = setTimeout(() => {
       if (child.exitCode !== null) return;
       timedOut = true;
-      child.kill("SIGTERM");
-      killTimer = setTimeout(() => child.kill("SIGKILL"), opts.killGraceMs);
+      killTree("SIGTERM");
+      killTimer = setTimeout(() => killTree("SIGKILL"), opts.killGraceMs);
     }, opts.timeoutMs);
     // StringDecoder: a multi-byte character split across pipe chunks must
     // not decode to replacement chars in findings the agent will act on.
@@ -118,63 +126,30 @@ export async function readStdin(): Promise<string> {
   return Buffer.concat(chunks).toString("utf8");
 }
 
-function globToRegExp(pattern: string): RegExp {
-  let re = "";
-  for (let i = 0; i < pattern.length; i++) {
-    const c = pattern[i];
-    if (c === "*") {
-      if (pattern[i + 1] === "*") {
-        if (pattern[i + 2] === "/") {
-          re += "(?:[^/]+/)*";
-          i += 2;
-        } else {
-          re += ".*";
-          i += 1;
-        }
-      } else {
-        re += "[^/]*";
-      }
-    } else if (c === "?") {
-      re += "[^/]";
-    } else if (c !== undefined && "\\^$.|+()[]{}".includes(c)) {
-      re += `\\${c}`;
-    } else {
-      re += c;
-    }
-  }
-  return new RegExp(`^${re}$`);
-}
-
-function walkFiles(root: string, prefix: string, out: string[]): void {
-  let entries: Dirent[];
+/** Create the file only if absent. True when created, false when it exists. */
+export function writeTextFileExclusive(path: string, content: string): boolean {
+  const dir = dirname(path);
+  if (dir !== "" && dir !== ".") mkdirSync(dir, { recursive: true });
   try {
-    entries = readdirSync(`${root}${prefix === "" ? "" : `/${prefix}`}`, {
-      withFileTypes: true,
-    });
+    writeFileSync(path, content, { flag: "wx" });
+    return true;
   } catch {
-    return;
-  }
-  for (const entry of entries) {
-    if (entry.name.startsWith(".") || entry.name === "node_modules") continue;
-    const rel = prefix === "" ? entry.name : `${prefix}/${entry.name}`;
-    if (entry.isDirectory()) walkFiles(root, rel, out);
-    else if (entry.isFile()) out.push(rel);
+    return false;
   }
 }
 
-/**
- * Minimal glob over regular files, relative paths, dotfiles excluded.
- * Supports "**", "*" and "?". Walks only the static prefix of the pattern.
- */
-export function globSync(pattern: string, cwd = "."): string[] {
-  const segments = pattern.split("/");
-  const wildIdx = segments.findIndex((s) => /[*?]/.test(s));
-  if (wildIdx === -1) {
-    return existsSync(`${cwd}/${pattern}`) ? [pattern] : [];
+export function deleteFile(path: string): void {
+  try {
+    unlinkSync(path);
+  } catch {}
+}
+
+/** Best effort liveness probe; unknown errors count as alive (conservative). */
+export function processAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (e) {
+    return (e as { code?: string }).code !== "ESRCH";
   }
-  const base = segments.slice(0, wildIdx).join("/");
-  const files: string[] = [];
-  walkFiles(cwd, base, files);
-  const re = globToRegExp(pattern);
-  return files.filter((f) => re.test(f));
 }

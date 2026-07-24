@@ -1,14 +1,17 @@
 #!/usr/bin/env node
 import { cmdClaudeHook, cmdInstallClaude } from "./claude.ts";
-import { cmdDoctor, cmdHint, cmdInit, cmdRun, type RunFlags } from "./commands.ts";
+import { cmdHint, cmdInit, cmdRun, type RunFlags } from "./commands.ts";
 import { CONFIG_FILE } from "./config.ts";
+import { cmdDoctor } from "./doctor.ts";
+import { cmdFix } from "./fix.ts";
 import { cmdInstallHooks } from "./hooks.ts";
 
 const USAGE = `hyperfixer, layered verification pipeline for agent-written code
 
 Usage:
-  hyperfixer run [flags]      run gates in cost order, write verdict, exit 0/1
-  hyperfixer init             write default ${CONFIG_FILE}
+  hyperfixer run [flags]      run gates in cost order, write verdict
+  hyperfixer fix [flags]      run every gate's fixCommand, then verify
+  hyperfixer init             detect the stack, write ${CONFIG_FILE}
   hyperfixer hint             print first actionable fix from last verdict
   hyperfixer doctor           check toolchain and config health
   hyperfixer install-hooks    install git pre-commit and pre-push hooks
@@ -26,7 +29,11 @@ Run flags:
   --no-fail-fast        run all gates even after a failure
   --out-dir <dir>       verdict output directory (default .hyperfixer)
 
-Exit codes: 0 pass, 1 gate failed, 2 usage/config error.`;
+Exit codes:
+  0 all gates pass
+  1 a gate failed, fix CODE, read the hint
+  2 setup problem, config error, empty pipeline, lock held, fix SETUP
+  3 gate infrastructure failed, timeout or tool crash, do NOT edit code`;
 
 function parseRunFlags(args: string[]): RunFlags | null {
   const flags: RunFlags = {
@@ -116,6 +123,10 @@ async function main(argv: string[]): Promise<number> {
     case "run": {
       const flags = parseRunFlags(rest);
       return flags === null ? 2 : cmdRun(flags);
+    }
+    case "fix": {
+      const flags = parseRunFlags(rest);
+      return flags === null ? 2 : cmdFix(flags);
     }
     case "init":
       return cmdInit();

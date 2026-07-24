@@ -16,6 +16,13 @@
         "src/**",
         "test/**",
         "biome.json"
+      ],
+      "fixCommand": [
+        "bunx",
+        "biome",
+        "check",
+        "--write",
+        "."
       ]
     },
     {
@@ -57,8 +64,11 @@
         "test",
         "test/runner.test.ts",
         "test/parsers.test.ts",
+        "test/parsers-json.test.ts",
         "test/cache.test.ts",
-        "test/changed.test.ts"
+        "test/changed.test.ts",
+        "test/lock.test.ts",
+        "test/runtime.test.ts"
       ],
       "parser": "bun-test",
       "inputs": [

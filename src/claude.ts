@@ -1,7 +1,8 @@
 import { green, red } from "./colors.ts";
 import { loadConfig } from "./config.ts";
+import { acquireLock } from "./lock.ts";
 import { writeVerdict } from "./report.ts";
-import { runPipeline } from "./runner.ts";
+import { exitCodeFor, runPipeline } from "./runner.ts";
 import { fileExists, readStdin, readTextFile, writeTextFile } from "./runtime.ts";
 
 const HOOK_COMMAND = "npx --yes hyperfixer claude-hook";
@@ -33,10 +34,25 @@ export async function cmdClaudeHook(configPath: string): Promise<number> {
   // Fail closed on internal errors, but with a message the agent can act on.
   try {
     const config = await loadConfig(configPath);
-    const verdict = await runPipeline(config);
-    await writeVerdict(verdict, config.outDir);
+    const lock = acquireLock(config.outDir);
+    if (!lock.ok) {
+      console.error("hyperfixer: another run is in progress, retry in a moment");
+      return 2;
+    }
+    let verdict: Awaited<ReturnType<typeof runPipeline>>;
+    try {
+      verdict = await runPipeline(config);
+      await writeVerdict(verdict, config.outDir);
+    } finally {
+      lock.release();
+    }
     if (!verdict.ok) {
-      console.error(verdict.hint ?? "hyperfixer gates failed, see verdict.json");
+      const infra = exitCodeFor(verdict) === 3;
+      console.error(
+        infra
+          ? `hyperfixer: gate infrastructure failed, not a code error: ${verdict.hint ?? "see verdict.json"}`
+          : (verdict.hint ?? "hyperfixer gates failed, see verdict.json"),
+      );
       return 2;
     }
     return 0;

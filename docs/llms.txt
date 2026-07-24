@@ -5,15 +5,15 @@
 Key facts:
 
 - Install: `npm i -D hyperfixer` or `bun add -d hyperfixer`, run with `npx hyperfixer`, `bunx hyperfixer` or `deno run -A npm:hyperfixer`
-- Commands: `run`, `init` (detects the stack and generates config), `hint` (first actionable fix, file:line), `doctor`, `install-hooks` (git pre-commit cost <= 50, pre-push full), `install-claude` (Claude Code PreToolUse hook), `claude-hook` (internal stdin entry point)
+- Commands: `run`, `fix` (run every gate's fixCommand then verify), `init` (detects the stack and generates config), `hint` (first actionable fix, file:line), `doctor`, `install-hooks` (git pre-commit cost <= 50, pre-push full), `install-claude` (Claude Code PreToolUse hook), `claude-hook` (internal stdin entry point)
 - Run flags: `--json`, `--quiet`, `--config <path>`, `--only <a,b>`, `--max-cost <n>`, `--changed`, `--no-cache`, `--no-fail-fast`, `--out-dir <dir>`
-- Exit codes are a strict contract: 0 all gates pass, 1 a gate failed or zero gates executed, 2 usage or config error
+- Exit codes are a strict contract: 0 all gates pass, 1 a gate failed (fix code), 2 setup problem (config error, empty pipeline, lock held), 3 gate infrastructure failed (timeout, tool crash, do not edit code)
 - The agent loop: `hyperfixer run --quiet || hyperfixer hint`, fix, repeat until exit 0
 - Gates are shell commands with a cost; equal costs run concurrently, fail-fast blocks later cost groups only
 - Gates declaring `inputs` globs are cached by input hash (command + file contents), failures never cached, typical re-verify drops from seconds to milliseconds
 - `{changed}` token in a gate command plus `--changed` expands to git-changed files, gate disabled when the tree is clean
-- Verdict JSON fields: ok, generatedAt, failedGate, hint, durationMs, gates[] with gate, status (pass|fail|skip|error), durationMs, exitCode, findings[] (file, line, column, code, message), outputTail, cached
-- Hanging gates are killed at timeoutMs (default 600000, SIGTERM then SIGKILL), duplicate gate names rejected, an empty pipeline is exit 1, never a false green
+- Verdict JSON fields: ok, generatedAt, inputsFingerprint (content-based staleness proof), failedGate, hint, durationMs, gates[] with gate, status (pass|fail|skip|error), durationMs, exitCode, findings[] (file, line, column, code, message), outputTail, cached
+- Hanging gates are killed with their whole process group at timeoutMs (default 600000, SIGTERM then SIGKILL), duplicate gate names rejected, one run per repo at a time (lock file), an empty pipeline is exit 2, never a false green
 - GitHub Action: `uses: egeominotti/hyperfixer@main` with optional inputs config, max-cost, working-directory
 
 ## Docs

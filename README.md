@@ -29,10 +29,10 @@ OK, all gates passed in 601ms
 
 Task runners that order and cache commands already exist. What hyperfixer adds is a **contract a coding agent can rely on**, and this is the part to build your loop around:
 
-- **Strict exit codes**: `0` verified, `1` your code is wrong (read the hint), `2` the setup is wrong (fix config, not code). A broken config can never masquerade as a test failure.
+- **Strict exit codes**: `0` verified, `1` your code is wrong (read the hint), `2` the setup is wrong (config error, empty pipeline, lock held), `3` gate infrastructure failed (timeout, tool crash), do not edit code for a 3. A broken config or a hung tool can never masquerade as a test failure.
 - **Structured verdict** on disk: per-gate status, structured `findings` with file and line, timings, `outputTail`, `generatedAt`.
 - **One-line `hint`**: the first blocking problem, pre-formatted as `[gate] file:line, message`, the exact string to feed back to the agent.
-- **Staleness guard**: `hint` warns when the verdict is older than 10 minutes, so an agent that edited code cannot trust a stale green.
+- **Staleness guard by content**: the verdict stores a fingerprint of every gate's inputs; `hint` recomputes it and warns only when the code actually changed, no clock guessing.
 - **No false greens**: an empty pipeline (over-filtered `--max-cost`, all gates disabled) is exit 1, failures are never cached, and property tests print fast-check replay data (seed, path, counterexample) into the verdict so the agent can re-run the exact failing case.
 
 ## Why layers
@@ -86,7 +86,8 @@ npx hyperfixer install-hooks   # enforce on git commit and push
 ## CLI
 
 ```
-hyperfixer run [flags]      run gates in cost order, write verdict, exit 0/1
+hyperfixer run [flags]      run gates in cost order, write verdict
+hyperfixer fix [flags]      run every gate's fixCommand, then verify
 hyperfixer init             detect the stack, write hyperfixer.config.json
 hyperfixer hint             print first actionable fix from last verdict
 hyperfixer doctor           check toolchain and config health
@@ -106,7 +107,7 @@ Run flags:
   --out-dir <dir>       verdict output directory (default .hyperfixer)
 ```
 
-Exit codes: `0` all gates pass, `1` a gate failed, `2` usage or config error. The contract is strict: agents can branch on the exit code alone.
+Exit codes: `0` all gates pass, `1` a gate failed (fix code), `2` setup problem (config error, empty pipeline, lock held), `3` gate infrastructure failed (timeout, tool crash, do not edit code). The contract is strict: agents branch on the exit code alone.
 
 ## Configuration
 
@@ -130,11 +131,12 @@ Exit codes: `0` all gates pass, `1` a gate failed, `2` usage or config error. Th
 |---|---|
 | `cost` | Relative cost; gates run in ascending order, `--max-cost` filters on it |
 | `command` | Argv array; omit to skip the gate |
-| `parser` | `tsc`, `bun-test`, `fast-check`, or `raw`, extracts structured findings from output |
+| `parser` | `tsc`, `bun-test`, `fast-check`, `eslint-json`, `findings-json`, or `raw`, extracts structured findings from output |
 | `optional` | Skip (instead of error) when the command cannot start |
 | `enabled` | `false` removes the gate from the pipeline |
 | `timeoutMs` | Kill the gate after this many ms (default 600000) |
 | `inputs` | Glob patterns this gate depends on; declaring them enables input-hash caching |
+| `fixCommand` | Autofix argv run by `hyperfixer fix` before re-verifying (biome `--write`, eslint `--fix`) |
 
 Gate names must be unique; duplicates are rejected at load time. A hanging gate cannot wedge an unattended agent loop: it is killed at `timeoutMs` (SIGTERM, then SIGKILL) and reported as `error`. Gates with equal `cost` run concurrently as a group; fail-fast blocks later groups only.
 
@@ -188,7 +190,8 @@ This writes (or merges into) `.claude/settings.json` a [PreToolUse hook](https:/
 ```jsonc
 {
   "ok": false,
-  "generatedAt": "2026-07-24T10:30:00.000Z",   // staleness guard
+  "generatedAt": "2026-07-24T10:30:00.000Z",
+  "inputsFingerprint": "sha256…",              // content-based staleness guard
   "failedGate": "typecheck",
   "hint": "[typecheck] src/service.ts:42, Type 'string' is not assignable…",
   "durationMs": 533,

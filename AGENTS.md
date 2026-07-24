@@ -58,7 +58,7 @@ bun install          # Bun >= 1.1 required; there is no Node/npm path
 2. **No dashes in prose**, use commas in docs, CLI output and messages.
 3. **Zero runtime dependencies**, the published package must stay dependency-free.
 4. **Strictness is non-negotiable**, do not weaken `tsconfig.json` or `biome.json`; fix code to satisfy them. No `!` non-null assertions in `src/`.
-5. **Exit-code contract is sacred**: 0 pass, 1 gate failed, 2 usage/config error. Agents branch on it.
+5. **Exit-code contract is sacred**: 0 pass, 1 code failure, 2 setup problem (config, empty pipeline, lock), 3 gate infrastructure failure. Agents branch on it.
 6. **Tests accompany changes**: behavior change means unit test; verdict-shape change means property tests updated; API change means `src/index.ts` + type tests + README schema updated.
 7. **Injected executor**: never make `runPipeline` spawn processes directly in tests; pass a fake `GateExecutor`.
 8. **Conventional Commits** for commit messages; versioning and CHANGELOG are automated by CI on green `main`.

@@ -91,6 +91,19 @@ export function buildHint(results: GateResult[]): string | null {
   return `[${blocking.gate}] ${blocking.note ?? `exit code ${blocking.exitCode}`}`;
 }
 
+/**
+ * The exit-code contract, in one place: 0 verified, 1 the code is wrong,
+ * 2 the setup is wrong (config error is handled upstream, empty pipeline
+ * here), 3 gate infrastructure failed (timeout, tool crash), do not edit
+ * code for a 3.
+ */
+export function exitCodeFor(verdict: Verdict): 0 | 1 | 2 | 3 {
+  if (verdict.ok) return 0;
+  if (!verdict.gates.some((r) => r.status !== "skip")) return 2;
+  const blocking = verdict.gates.find((r) => r.status === "fail" || r.status === "error");
+  return blocking?.status === "error" ? 3 : 1;
+}
+
 export async function runPipeline(
   config: HyperfixerConfig,
   exec: GateExecutor = spawnExecutor,

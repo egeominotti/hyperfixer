@@ -1,11 +1,5 @@
-import {
-  fileExists,
-  globSync,
-  readBytes,
-  readTextFile,
-  sha256,
-  writeTextFile,
-} from "./runtime.ts";
+import { globSync } from "./glob.ts";
+import { fileExists, readBytes, readTextFile, sha256, writeTextFile } from "./runtime.ts";
 import type { GateExecutor, GateResult, GateSpec } from "./types.ts";
 
 interface CacheEntry {
@@ -59,6 +53,21 @@ export function gateHash(gate: GateSpec, cwd = "."): string | null {
       hasher.update("gone");
     }
   }
+  return hasher.digest("hex");
+}
+
+/**
+ * Combined fingerprint of every enabled gate's inputs, null when no gate
+ * declares inputs. Stored in the verdict so hint can prove staleness by
+ * content instead of guessing by clock.
+ */
+export function pipelineFingerprint(gates: GateSpec[]): string | null {
+  const parts = gates
+    .filter((g) => g.enabled !== false)
+    .map((g) => `${g.name}:${gateHash(g) ?? "-"}`);
+  if (parts.every((p) => p.endsWith(":-"))) return null;
+  const hasher = sha256();
+  hasher.update(parts.join("|"));
   return hasher.digest("hex");
 }
 

@@ -84,13 +84,39 @@ describe("e2e: run", () => {
     expect(verdict.gates.map((g: { gate: string }) => g.gate)).toEqual(["cheap"]);
   });
 
-  test("--max-cost excluding every gate: exit 1, never a false OK", async () => {
+  test("--max-cost excluding every gate: exit 2 setup problem, never a false OK", async () => {
     await writeConfig(dir, [{ name: "a", cost: 10, command: ["true"] }]);
     const r = await cli(dir, "run", "--quiet", "--max-cost", "1");
-    expect(r.exitCode).toBe(1);
+    expect(r.exitCode).toBe(2);
     const verdict = await Bun.file(join(dir, ".hyperfixer/verdict.json")).json();
     expect(verdict.ok).toBe(false);
     expect(verdict.hint).toContain("no gates executed");
+  });
+
+  test("timed-out gate: exit 3 infrastructure, distinct from code failure", async () => {
+    await writeConfig(dir, [
+      { name: "hang", cost: 1, command: ["sleep", "10"], timeoutMs: 100 },
+    ]);
+    const r = await cli(dir, "run", "--quiet");
+    expect(r.exitCode).toBe(3);
+    const verdict = await Bun.file(join(dir, ".hyperfixer/verdict.json")).json();
+    expect(verdict.gates[0].status).toBe("error");
+  });
+
+  test("fix runs fixCommand then verifies green", async () => {
+    const marker = join(dir, "fixed.txt");
+    await writeConfig(dir, [
+      {
+        name: "needs-fix",
+        cost: 1,
+        command: ["test", "-f", marker],
+        fixCommand: ["sh", "-c", `printf ok > ${marker}`],
+      },
+    ]);
+    expect((await cli(dir, "run", "--quiet")).exitCode).toBe(1);
+    const r = await cli(dir, "fix", "--quiet");
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toContain("fix needs-fix");
   });
 
   test("--only with unknown gate: exit 2", async () => {
@@ -150,6 +176,30 @@ describe("e2e: hint", () => {
   test("malformed config: exit 2, not 1", async () => {
     const r = await cli(dir, "hint", "--config", "bad.json");
     expect(r.exitCode).toBe(2);
+  });
+
+  test("filtered run (--only) never looks stale by construction", async () => {
+    await Bun.write(join(dir, "watched.txt"), "same");
+    await writeConfig(dir, [
+      { name: "a", cost: 1, command: ["true"], inputs: ["watched.txt"] },
+      { name: "b", cost: 2, command: ["true"], inputs: ["watched.txt"] },
+    ]);
+    await cli(dir, "run", "--quiet", "--only", "a");
+    const r = await cli(dir, "hint");
+    expect(r.stderr).not.toContain("inputs changed");
+  });
+
+  test("content staleness: hint warns after an input file changes", async () => {
+    await Bun.write(join(dir, "watched.txt"), "v1");
+    await writeConfig(dir, [
+      { name: "a", cost: 1, command: ["true"], inputs: ["watched.txt"] },
+    ]);
+    await cli(dir, "run", "--quiet");
+    const fresh = await cli(dir, "hint");
+    expect(fresh.stderr).not.toContain("inputs changed");
+    await Bun.write(join(dir, "watched.txt"), "v2");
+    const stale = await cli(dir, "hint");
+    expect(stale.stderr).toContain("inputs changed since this verdict");
   });
 });
 

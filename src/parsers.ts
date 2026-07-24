@@ -1,3 +1,4 @@
+import { parseEslintJson, parseFindingsJson } from "./parsers-json.ts";
 import type { Finding, ParserKind } from "./types.ts";
 
 const TSC_LINE = /^(.+?)\((\d+),(\d+)\): error (TS\d+): (.*)$/;
@@ -95,6 +96,10 @@ export function parseOutput(kind: ParserKind, output: string): Finding[] {
       return parseBunTest(output);
     case "fast-check":
       return parseFastCheck(output);
+    case "eslint-json":
+      return parseEslintJson(output);
+    case "findings-json":
+      return parseFindingsJson(output);
     case "raw":
       return [];
   }

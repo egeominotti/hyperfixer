@@ -123,7 +123,7 @@ $("run").addEventListener("click", async () => {
   const total = Math.round(performance.now() - start);
   term.innerHTML += ok
     ? '\n<span class="exit0">OK</span><span class="dim">, all gates passed in ' + total + "ms</span>\n<span class=\"dim\">exit 0</span>"
-    : '\n<span class="exit1">FAIL</span>' + (failed ? " at gate <strong>" + failed.gate + "</strong>" : "") + ", " + hint + '\n<span class="dim">exit 1, agent reads the hint, fixes, re-runs</span>';
+    : '\n<span class="exit1">FAIL</span>' + (failed ? " at gate <strong>" + failed.gate + "</strong>" : "") + ", " + hint + '\n<span class="dim">' + (failed ? "exit 1, agent reads the hint, fixes, re-runs" : "exit 2, empty pipeline is a setup problem") + "</span>";
   $("verdict").textContent = JSON.stringify(
     { ok, generatedAt: new Date().toISOString(), failedGate: failed ? failed.gate : null, hint, durationMs: total, gates: results },
     null, 2);

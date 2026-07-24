@@ -57,11 +57,12 @@
   <tr><th>Field</th><th>Meaning</th></tr>
   <tr><td><code>cost</code></td><td>Relative cost; gates run in ascending order, equal costs run concurrently as a group, <code>--max-cost</code> filters on it</td></tr>
   <tr><td><code>command</code></td><td>Argv array, no shell; omit to skip the gate</td></tr>
-  <tr><td><code>parser</code></td><td><code>tsc</code>, <code>bun-test</code>, <code>fast-check</code>, or <code>raw</code>, extracts structured findings from output</td></tr>
+  <tr><td><code>parser</code></td><td><code>tsc</code>, <code>bun-test</code>, <code>fast-check</code>, <code>eslint-json</code>, <code>findings-json</code>, or <code>raw</code>, extracts structured findings from output. <code>findings-json</code> is the generic protocol: any tool printing a JSON array of findings integrates without a dedicated parser</td></tr>
   <tr><td><code>optional</code></td><td>Skip (instead of error) when the command cannot start</td></tr>
   <tr><td><code>enabled</code></td><td><code>false</code> removes the gate from the pipeline</td></tr>
   <tr><td><code>timeoutMs</code></td><td>Kill the gate after this many ms, default 600000</td></tr>
-  <tr><td><code>inputs</code></td><td>Glob patterns the gate depends on, declaring them enables caching</td></tr>
+  <tr><td><code>inputs</code></td><td>Glob patterns the gate depends on, declaring them enables caching and content staleness</td></tr>
+  <tr><td><code>fixCommand</code></td><td>Autofix argv run by <code>hyperfixer fix</code> before re-verifying</td></tr>
 </table>
 
 <h2>Caching</h2>
@@ -75,6 +76,7 @@
 <pre>{
   "ok": false,
   "generatedAt": "2026-07-24T10:30:00.000Z",
+  "inputsFingerprint": "sha256…",
   "failedGate": "typecheck",
   "hint": "[typecheck] src/service.ts:42, Type 'string' is not assignable…",
   "durationMs": 533,

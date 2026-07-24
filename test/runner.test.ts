@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { buildHint, runPipeline, spawnExecutor } from "../src/runner.ts";
+import { buildHint, exitCodeFor, runPipeline, spawnExecutor } from "../src/runner.ts";
 import type { GateExecutor, GateSpec, GateStatus } from "../src/types.ts";
 
 function gate(name: string, cost: number, extra: Partial<GateSpec> = {}): GateSpec {
@@ -90,6 +90,27 @@ describe("runPipeline", () => {
       fakeExec({}),
     );
     expect(verdict.gates.map((g) => g.gate)).toEqual(["a"]);
+  });
+});
+
+describe("exitCodeFor", () => {
+  test("full contract mapping", async () => {
+    const verdictWith = async (statuses: Record<string, GateStatus>, names: string[]) =>
+      runPipeline(
+        { ...baseConfig, gates: names.map((n, i) => gate(n, i + 1)) },
+        fakeExec(statuses),
+      );
+
+    expect(exitCodeFor(await verdictWith({}, ["a"]))).toBe(0);
+    expect(exitCodeFor(await verdictWith({ a: "fail" }, ["a", "b"]))).toBe(1);
+    expect(exitCodeFor(await verdictWith({ a: "error" }, ["a", "b"]))).toBe(3);
+    // pass then error later: first blocking is the error
+    expect(exitCodeFor(await verdictWith({ b: "error" }, ["a", "b"]))).toBe(3);
+    // empty pipeline is a setup problem
+    expect(
+      exitCodeFor(await runPipeline({ ...baseConfig, gates: [] }, fakeExec({}))),
+    ).toBe(2);
+    expect(exitCodeFor(await verdictWith({ a: "skip" }, ["a"]))).toBe(2);
   });
 });
 

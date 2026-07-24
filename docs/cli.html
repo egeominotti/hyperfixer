@@ -40,6 +40,7 @@
 <table>
   <tr><th>Command</th><th>What it does</th></tr>
   <tr><td><code>hyperfixer run [flags]</code></td><td>Run gates in cost order, write verdict, exit 0/1</td></tr>
+  <tr><td><code>hyperfixer fix [flags]</code></td><td>Run every gate's <code>fixCommand</code> (biome --write, eslint --fix), then verify with the normal pipeline</td></tr>
   <tr><td><code>hyperfixer init</code></td><td>Detect the stack (Biome or ESLint, tsconfig, Bun or vitest or npm test) and write a tailored <code>hyperfixer.config.json</code></td></tr>
   <tr><td><code>hyperfixer hint</code></td><td>Print the first actionable fix from the last verdict, warns on stderr when the verdict is older than 10 minutes</td></tr>
   <tr><td><code>hyperfixer doctor</code></td><td>Check toolchain and config health</td></tr>
@@ -66,10 +67,11 @@
 <table>
   <tr><th>Code</th><th>Meaning</th></tr>
   <tr><td><code>0</code></td><td>All gates pass</td></tr>
-  <tr><td><code>1</code></td><td>A gate failed, or zero gates executed (an empty pipeline never masquerades as green)</td></tr>
-  <tr><td><code>2</code></td><td>Usage or config error</td></tr>
+  <tr><td><code>1</code></td><td>A gate failed, the code is wrong, read the hint</td></tr>
+  <tr><td><code>2</code></td><td>Setup problem: config error, empty pipeline (zero gates executed), or another run holds the lock</td></tr>
+  <tr><td><code>3</code></td><td>Gate infrastructure failed (timeout, tool crash), do not edit code</td></tr>
 </table>
-<p>The contract is strict by design: a broken config is exit 2, never exit 1, so an agent reading exit codes never mistakes a setup problem for a code problem.</p>
+<p>The contract is strict by design: a broken config is exit 2 and a hung tool is exit 3, never exit 1, so an agent reading exit codes never mistakes a setup or infrastructure problem for a code problem.</p>
 
 <h2>Robustness</h2>
 <ul>

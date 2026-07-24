@@ -1,11 +1,12 @@
-import { cachingExecutor, loadCache, saveCache } from "./cache.ts";
+import { cachingExecutor, loadCache, pipelineFingerprint, saveCache } from "./cache.ts";
 import { applyChanged, changedFiles } from "./changed.ts";
-import { bold, dim, green, red } from "./colors.ts";
+import { bold, dim, red } from "./colors.ts";
 import { CONFIG_FILE, defaultConfig, loadConfig } from "./config.ts";
 import { detectGates } from "./initgen.ts";
+import { acquireLock } from "./lock.ts";
 import { readVerdict, renderHuman, writeVerdict } from "./report.ts";
-import { runPipeline, spawnExecutor } from "./runner.ts";
-import { fileExists, spawnSyncCapture, writeTextFile } from "./runtime.ts";
+import { exitCodeFor, runPipeline, spawnExecutor } from "./runner.ts";
+import { fileExists, writeTextFile } from "./runtime.ts";
 import type { HyperfixerConfig } from "./types.ts";
 
 const STALE_AFTER_MS = 10 * 60_000;
@@ -30,6 +31,9 @@ export async function cmdRun(flags: RunFlags): Promise<number> {
     console.error(red(e instanceof Error ? e.message : String(e)));
     return 2;
   }
+  // Fingerprint the pristine gate set: hint recomputes from the full config,
+  // so a filtered run (--only, --max-cost) must not look stale by construction.
+  const pristineGates = config.gates;
   const only = flags.only;
   if (only) {
     const known = new Set(config.gates.map((g) => g.name));
@@ -61,18 +65,33 @@ export async function cmdRun(flags: RunFlags): Promise<number> {
     config.gates = applyChanged(config.gates, files);
   }
 
-  const cache = flags.noCache ? null : await loadCache(config.outDir);
-  const exec = cache === null ? spawnExecutor : cachingExecutor(spawnExecutor, cache);
-  const verdict = await runPipeline(config, exec);
-  if (cache !== null) await saveCache(config.outDir, cache);
-  const path = await writeVerdict(verdict, config.outDir);
-  if (flags.json) {
-    console.log(JSON.stringify(verdict, null, 2));
-  } else if (!flags.quiet) {
-    console.log(renderHuman(verdict));
-    console.log(dim(`verdict: ${path}`));
+  const lock = acquireLock(config.outDir);
+  if (!lock.ok) {
+    console.error(
+      red(
+        `another hyperfixer run is in progress${lock.holderPid !== null ? ` (pid ${lock.holderPid})` : ""}, wait for it or delete ${config.outDir}/lock if stale`,
+      ),
+    );
+    return 2;
   }
-  return verdict.ok ? 0 : 1;
+  try {
+    const fingerprint = pipelineFingerprint(pristineGates);
+    const cache = flags.noCache ? null : await loadCache(config.outDir);
+    const exec = cache === null ? spawnExecutor : cachingExecutor(spawnExecutor, cache);
+    const verdict = await runPipeline(config, exec);
+    if (fingerprint !== null) verdict.inputsFingerprint = fingerprint;
+    if (cache !== null) await saveCache(config.outDir, cache);
+    const path = await writeVerdict(verdict, config.outDir);
+    if (flags.json) {
+      console.log(JSON.stringify(verdict, null, 2));
+    } else if (!flags.quiet) {
+      console.log(renderHuman(verdict));
+      console.log(dim(`verdict: ${path}`));
+    }
+    return exitCodeFor(verdict);
+  } finally {
+    lock.release();
+  }
 }
 
 export async function cmdInit(): Promise<number> {
@@ -106,67 +125,22 @@ export async function cmdHint(configPath: string): Promise<number> {
     console.error(`no verdict found in ${config.outDir}/, run "hyperfixer run" first`);
     return 2;
   }
-  const ageMs = Date.now() - Date.parse(verdict.generatedAt ?? "");
-  if (!Number.isFinite(ageMs) || ageMs > STALE_AFTER_MS) {
-    console.error('warning: verdict may be stale, re-run "hyperfixer run"');
+  // Content beats clock: when the verdict carries an inputs fingerprint,
+  // recompute it and warn only on a real change. Clock is the fallback.
+  if (verdict.inputsFingerprint !== undefined) {
+    if (pipelineFingerprint(config.gates) !== verdict.inputsFingerprint) {
+      console.error(
+        'warning: inputs changed since this verdict, re-run "hyperfixer run"',
+      );
+    }
+  } else {
+    const ageMs = Date.now() - Date.parse(verdict.generatedAt ?? "");
+    if (!Number.isFinite(ageMs) || ageMs > STALE_AFTER_MS) {
+      console.error('warning: verdict may be stale, re-run "hyperfixer run"');
+    }
   }
   console.log(
     verdict.ok ? "OK, nothing to fix" : (verdict.hint ?? "FAIL, see verdict.json"),
   );
-  return verdict.ok ? 0 : 1;
-}
-
-function toolAvailable(argv: string[]): boolean {
-  return spawnSyncCapture(argv).exitCode === 0;
-}
-
-/** Check toolchain and config health. */
-export async function cmdDoctor(configPath: string): Promise<number> {
-  let failures = 0;
-  const report = (ok: boolean, label: string, fix?: string) => {
-    console.log(
-      `${ok ? green("✓") : red("✗")} ${label}${!ok && fix ? dim(`, ${fix}`) : ""}`,
-    );
-    if (!ok) failures++;
-  };
-
-  report(
-    toolAvailable(["bun", "--version"]) ||
-      toolAvailable(["node", "--version"]) ||
-      toolAvailable(["deno", "--version"]),
-    "runtime (bun, node or deno)",
-  );
-  report(
-    toolAvailable(["bunx", "tsc", "--version"]) ||
-      toolAvailable(["npx", "tsc", "--version"]),
-    "typescript (tsc)",
-    "bun add -d typescript (or npm i -D typescript)",
-  );
-
-  try {
-    const config = await loadConfig(configPath);
-    report(true, `config (${fileExists(configPath) ? configPath : "defaults"})`);
-    const enabled = config.gates.filter((g) => g.enabled !== false);
-    console.log(
-      dim(`  enabled gates: ${enabled.map((g) => g.name).join(", ") || "none"}`),
-    );
-    const mutation = config.gates.find(
-      (g) => g.name === "mutation" && g.enabled !== false,
-    );
-    if (mutation) {
-      report(
-        toolAvailable(["bunx", "stryker", "--version"]) ||
-          toolAvailable(["npx", "stryker", "--version"]),
-        "stryker (mutation gate enabled)",
-        "bun add -d @stryker-mutator/core",
-      );
-    }
-  } catch (e) {
-    report(false, `config: ${e instanceof Error ? e.message : String(e)}`);
-  }
-
-  console.log(
-    failures === 0 ? green("\nall checks passed") : red(`\n${failures} check(s) failed`),
-  );
-  return failures === 0 ? 0 : 1;
+  return exitCodeFor(verdict);
 }

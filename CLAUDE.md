@@ -22,19 +22,25 @@ bun src/cli.ts run           # run the CLI from source
 
 ## Architecture
 
-Zero runtime dependencies. Bun-first (uses `Bun.spawn`, `Bun.file`, `Bun.write`).
+Zero runtime dependencies. Cross-runtime: node builtins only, everything runtime-specific goes through `src/runtime.ts` (Node >= 20, Bun, Deno 2).
 
 ```
 src/
   types.ts      # all shared types (GateSpec, GateResult, Verdict, Finding)
   config.ts     # config load/validate + DEFAULT_GATES (the canonical gate list)
   parsers.ts    # tsc / bun-test output to structured Finding[]
-  runner.ts     # pipeline: cost groups in parallel, timeout, fail-fast, hint
-  cache.ts      # input-hash cache (mtime based), caching executor wrapper
+  runtime.ts    # portability layer (spawn, fs, hash, stdin), node builtins only
+  glob.ts       # minimal portable glob
+  lock.ts       # one run per repo, atomic lock with stale steal
+  runner.ts     # pipeline: cost groups in parallel, timeout, fail-fast, hint, exit codes
+  cache.ts      # content-hash cache, caching executor, pipeline fingerprint
   changed.ts    # {changed} token expansion from git status
   report.ts     # human rendering (colors) + verdict.json read/write with validation
   colors.ts     # minimal ANSI helpers (NO_COLOR / TTY aware)
-  commands.ts   # CLI command implementations (run, init, hint, doctor)
+  commands.ts   # CLI command implementations (run, init, hint)
+  fix.ts        # hyperfixer fix, run fixCommands then verify
+  doctor.ts     # toolchain and config health checks
+  parsers-json.ts # eslint-json and generic findings-json parsers
   initgen.ts    # smart init: stack detection, tailored gate list
   claude.ts     # Claude Code integration (install-claude, claude-hook)
   hooks.ts      # git hook installer (pre-commit, pre-push)
@@ -57,6 +63,6 @@ Data flow: `cli.ts` to `commands.ts` to `loadConfig` to `runPipeline(config, exe
 - **tsconfig is maximally strict** (`noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`). Never weaken flags; fix the code instead. No non-null assertions in `src/` (Biome enforces).
 - **Every behavior change needs a test.** Runner/config logic gets a unit test; anything touching verdict shape must keep the property tests in `test/property/` passing.
 - **Public API changes** must update `src/index.ts`, the type tests in `test/types/` and the README verdict schema.
-- **Exit-code contract is sacred**: 0 pass, 1 gate failed, 2 usage/config error. Agents branch on it; never let a config error surface as exit 1.
+- **Exit-code contract is sacred**: 0 pass, 1 code failure, 2 setup problem (config, empty pipeline, lock), 3 gate infrastructure failure. Agents branch on it; never let a config or infra error surface as exit 1.
 - New gates go in `DEFAULT_GATES` (src/config.ts) with a cost reflecting real execution expense; parsers for new tools go in `src/parsers.ts` with fixture-based tests.
 - Versioning is automated: CI bumps the patch version and CHANGELOG on green `main`. Never bump `package.json` version by hand.

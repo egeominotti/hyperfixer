@@ -109,9 +109,14 @@ function normalizeGate(raw: unknown, source: string): GateSpec {
     g.parser === "tsc" ||
     g.parser === "bun-test" ||
     g.parser === "fast-check" ||
+    g.parser === "eslint-json" ||
+    g.parser === "findings-json" ||
     g.parser === "raw"
   ) {
     spec.parser = g.parser;
+  }
+  if (Array.isArray(g.fixCommand) && g.fixCommand.every((c) => typeof c === "string")) {
+    spec.fixCommand = g.fixCommand;
   }
   if (typeof g.timeoutMs === "number" && g.timeoutMs > 0) {
     spec.timeoutMs = g.timeoutMs;
