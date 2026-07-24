@@ -4,6 +4,10 @@ All notable changes to hyperfixer are documented here. The format follows [Keep 
 
 ## [Unreleased]
 
+## [0.1.7] - 2026-07-24
+
+- docs: llms.txt and llms-full.txt, expanded npm keywords
+
 ## [0.1.6] - 2026-07-24
 
 - docs: GitHub Pages site, npm and docs badges in README
