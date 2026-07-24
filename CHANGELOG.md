@@ -4,6 +4,12 @@ All notable changes to hyperfixer are documented here. The format follows [Keep 
 
 ## [Unreleased]
 
+## [0.1.8] - 2026-07-24
+
+- feat: agent contract hardening, all 7 layers self-applied
+- docs: mobile polish and interactive pipeline simulator
+- docs: SEO metas, JSON-LD, sitemap, robots, og image
+
 ## [0.1.7] - 2026-07-24
 
 - docs: llms.txt and llms-full.txt, expanded npm keywords
