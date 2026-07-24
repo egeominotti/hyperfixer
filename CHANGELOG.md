@@ -4,6 +4,10 @@ All notable changes to hyperfixer are documented here. The format follows [Keep 
 
 ## [Unreleased]
 
+## [0.1.10] - 2026-07-24
+
+- fix: cross-runtime docs, git flag-aware hook regex, audit polish
+
 ## [0.1.9] - 2026-07-24
 
 - feat: cross-runtime support, Node, Bun and Deno
