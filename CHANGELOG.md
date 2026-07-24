@@ -4,6 +4,10 @@ All notable changes to hyperfixer are documented here. The format follows [Keep 
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-07-24
+
+- feat: production hardening, e2e suite, CI auto-release
+
 ## [0.1.0] - 2026-07-24
 
 ### Added
