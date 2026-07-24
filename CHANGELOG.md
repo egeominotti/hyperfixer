@@ -4,6 +4,10 @@ All notable changes to hyperfixer are documented here. The format follows [Keep 
 
 ## [Unreleased]
 
+## [0.1.6] - 2026-07-24
+
+- docs: GitHub Pages site, npm and docs badges in README
+
 ## [0.1.5] - 2026-07-24
 
 - chore: normalize bin path per npm pkg fix
