@@ -6,7 +6,11 @@ import { fileExists, readStdin, readTextFile, writeTextFile } from "./runtime.ts
 
 const HOOK_COMMAND = "npx --yes hyperfixer claude-hook";
 const SETTINGS_PATH = ".claude/settings.json";
-const GIT_WRITE = /\bgit\b[\s\S]*\b(commit|push)\b/;
+// Matches git invocations whose subcommand is commit or push. Global flags
+// between "git" and the subcommand are allowed, each optionally consuming one
+// value token (-c k=v, -C /path, --git-dir /x), so flagged invocations cannot
+// bypass verification while "git log; echo commit" stays unmatched.
+const GIT_WRITE = /\bgit\s+(?:-\S+\s+(?:[^-]\S*\s+)?)*(commit|push)\b/;
 
 /**
  * PreToolUse hook entry point. Reads the hook payload from stdin; when the

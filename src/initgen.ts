@@ -1,14 +1,14 @@
-import { existsSync, readFileSync } from "node:fs";
 import { DEFAULT_GATES } from "./config.ts";
+import { fileExists, readTextFile } from "./runtime.ts";
 import type { GateSpec } from "./types.ts";
 
 function anyOf(...paths: string[]): boolean {
-  return paths.some((p) => existsSync(p));
+  return paths.some((p) => fileExists(p));
 }
 
 function testScript(): boolean {
   try {
-    const pkg = JSON.parse(readFileSync("package.json", "utf8")) as {
+    const pkg = JSON.parse(readTextFile("package.json")) as {
       scripts?: Record<string, string>;
     };
     return typeof pkg.scripts?.test === "string";
@@ -60,7 +60,7 @@ export function detectGates(): DetectedConfig {
     detected.push("eslint");
   }
 
-  if (existsSync("tsconfig.json")) {
+  if (fileExists("tsconfig.json")) {
     gates.push({
       name: "typecheck",
       cost: 10,

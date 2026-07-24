@@ -69,7 +69,7 @@
   <tr><td>Suspicious green after big changes</td><td>Cache hit on a gate whose <code>inputs</code> globs miss some files</td><td>Fix the globs to cover every dependency, or <code>--no-cache</code> to force a full run</td></tr>
   <tr><td>Git hook did not run</td><td>Foreign hook left untouched (install exits 1), or <code>core.hooksPath</code> points elsewhere</td><td>Read the install output, merge manually; hooks resolve via <code>git rev-parse --git-path hooks</code>, worktree safe</td></tr>
   <tr><td>Agent bypassed the Claude hook</td><td>Alias or wrapper (<code>gp</code>, scripts) instead of plain <code>git push</code></td><td>By design best effort; the git hooks and CI layers catch what the matcher misses</td></tr>
-  <tr><td><code>env: bun: No such file or directory</code></td><td>Package ran on a machine without Bun</td><td>Install Bun (>= 1.1), hyperfixer is Bun-only</td></tr>
+  <tr><td>CLI does not start</td><td>No JS runtime on PATH</td><td>Install Node >= 20, Bun >= 1.1 or Deno >= 2, hyperfixer runs on all three</td></tr>
 </table>
 
 <h2>Reading the verdict like an agent</h2>

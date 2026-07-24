@@ -1,6 +1,6 @@
 # hyperfixer, complete documentation for LLM consumption
 
-> Layered verification pipeline for AI-agent-written code. Cost-ordered gates, fail-fast, machine-readable verdicts for self-correction loops. Bun-only, zero runtime dependencies, MIT. This single file contains the full documentation.
+> Layered verification pipeline for AI-agent-written code. Cost-ordered gates, fail-fast, machine-readable verdicts for self-correction loops. Runs on Node >= 20, Bun >= 1.1 and Deno >= 2, zero runtime dependencies, MIT. This single file contains the full documentation.
 
 ## What it is
 
@@ -19,7 +19,7 @@ hyperfixer orders gates by cost, stops at the first failure, and tells the agent
 
 ## Quick start
 
-    bun add -d hyperfixer          # requires Bun >= 1.1
+    npm i -D hyperfixer            # or bun add -d hyperfixer, or deno add npm:hyperfixer
     bunx hyperfixer init           # detects the stack, writes hyperfixer.config.json
     bunx hyperfixer doctor         # verify toolchain
     bunx hyperfixer run            # run the pipeline

@@ -109,6 +109,8 @@ export function sha256(): ReturnType<typeof createHash> {
 }
 
 export async function readStdin(): Promise<string> {
+  // Interactive terminal means nothing is piped: never block waiting.
+  if (process.stdin.isTTY) return "";
   const chunks: Buffer[] = [];
   for await (const chunk of process.stdin) {
     chunks.push(chunk as Buffer);
