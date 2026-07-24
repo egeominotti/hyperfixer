@@ -57,5 +57,5 @@ jobs:
 
           git add package.json CHANGELOG.md
           git commit -m "chore: release ${NEW} [skip ci]"
-          git tag "$NEW"
-          git push origin main --follow-tags
+          git tag -a "$NEW" -m "$NEW"
+          git push --atomic origin main "refs/tags/$NEW"
