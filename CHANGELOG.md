@@ -4,6 +4,10 @@ All notable changes to hyperfixer are documented here. The format follows [Keep 
 
 ## [Unreleased]
 
+## [0.1.9] - 2026-07-24
+
+- feat: cross-runtime support, Node, Bun and Deno
+
 ## [0.1.8] - 2026-07-24
 
 - feat: agent contract hardening, all 7 layers self-applied

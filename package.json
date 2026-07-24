@@ -1,6 +1,6 @@
 {
   "name": "hyperfixer",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "description": "Layered verification pipeline for AI-agent-written code: cost-ordered gates, fail-fast, machine-readable verdicts for self-correction loops. Runs on Node, Bun and Deno.",
   "type": "module",
   "license": "MIT",
