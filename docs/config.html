@@ -32,7 +32,8 @@
       "inputs": ["src/**", "test/**", "biome.json"] },
     { "name": "typecheck", "cost": 10, "command": ["bunx", "tsc", "--noEmit", "--pretty", "false"],
       "parser": "tsc", "inputs": ["src/**", "test/**", "tsconfig.json"] },
-    { "name": "unit",      "cost": 30, "command": ["bun", "test"], "parser": "bun-test" },
+    { "name": "unit",      "cost": 30, "command": ["bun", "test"], "parser": "bun-test",
+      "inputs": ["src/**", "test/**"] },
     { "name": "mutation",  "cost": 100, "command": ["bunx", "stryker", "run", "--incremental"],
       "enabled": false, "optional": true }
   ]
@@ -81,7 +82,7 @@
 <p>Written to <code>.hyperfixer/verdict.json</code> on every run. <code>status</code> is one of <code>pass</code>, <code>fail</code>, <code>skip</code>, <code>error</code>; cached results carry <code>"cached": true</code>. <code>generatedAt</code> guards against stale reads, <code>hint</code> is the one line an agent should act on first.</p>
 
 <footer>
-  <span>HYPERFIXER · MIT</span>
+  <span>HYPERFIXER · MIT · <a href="llms.txt">llms.txt</a> · <a href="llms-full.txt">llms-full.txt</a></span>
   <span><a href="https://github.com/egeominotti/hyperfixer">github.com/egeominotti/hyperfixer</a></span>
 </footer>
 </div>

@@ -9,7 +9,7 @@
 [![docs](https://img.shields.io/badge/docs-egeominotti.github.io%2Fhyperfixer-14395F)](https://egeominotti.github.io/hyperfixer/)
 [![license](https://img.shields.io/npm/l/hyperfixer)](LICENSE)
 
-📦 [npm package](https://www.npmjs.com/package/hyperfixer) · 📖 [Documentation](https://egeominotti.github.io/hyperfixer/)
+📦 [npm package](https://www.npmjs.com/package/hyperfixer) · 📖 [Documentation](https://egeominotti.github.io/hyperfixer/) · 🤖 [llms.txt](https://egeominotti.github.io/hyperfixer/llms.txt) · [llms-full.txt](https://egeominotti.github.io/hyperfixer/llms-full.txt)
 
 **Layered verification pipeline for AI-agent-written code.**
 

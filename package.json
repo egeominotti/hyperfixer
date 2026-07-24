@@ -11,16 +11,26 @@
   "homepage": "https://github.com/egeominotti/hyperfixer#readme",
   "bugs": "https://github.com/egeominotti/hyperfixer/issues",
   "keywords": [
+    "ai",
     "ai-agents",
+    "llm",
     "verification",
     "quality-gates",
+    "code-quality",
     "testing",
     "property-based-testing",
     "mutation-testing",
+    "fail-fast",
+    "git-hooks",
+    "pre-commit",
+    "typescript",
     "bun",
     "cli",
+    "developer-tools",
     "claude",
-    "codex"
+    "claude-code",
+    "codex",
+    "github-actions"
   ],
   "bin": {
     "hyperfixer": "src/cli.ts"

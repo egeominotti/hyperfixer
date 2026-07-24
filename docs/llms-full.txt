@@ -1,0 +1,153 @@
+# hyperfixer, complete documentation for LLM consumption
+
+> Layered verification pipeline for AI-agent-written code. Cost-ordered gates, fail-fast, machine-readable verdicts for self-correction loops. Bun-only, zero runtime dependencies, MIT. This single file contains the full documentation.
+
+## What it is
+
+Agent-written code fails in layers, and each layer needs a different detector:
+
+| Layer | Catches | Tool |
+|---|---|---|
+| Lint | Style drift, suspicious patterns | Biome |
+| Typecheck | Type errors | tsc, strict |
+| Type tests | Wrong public API types | expect-type |
+| Unit tests | Broken behavior | bun test |
+| Property-based | Edge cases nobody thought to write | fast-check |
+| Mutation | Tests that pass but assert nothing | Stryker, opt-in |
+
+hyperfixer orders gates by cost, stops at the first failure, and tells the agent exactly where to look. Gates with equal cost run concurrently; gates that declare `inputs` are cached by input hash, so an unchanged project re-verifies in milliseconds.
+
+## Quick start
+
+    bun add -d hyperfixer          # requires Bun >= 1.1
+    bunx hyperfixer init           # detects the stack, writes hyperfixer.config.json
+    bunx hyperfixer doctor         # verify toolchain
+    bunx hyperfixer run            # run the pipeline
+    bunx hyperfixer install-hooks  # enforce on git commit and push
+
+`init` inspects the project (Biome or ESLint, tsconfig, Bun or vitest or npm test) and generates a tailored gate list with caching inputs.
+
+## The agent loop
+
+    hyperfixer run --quiet || hyperfixer hint
+    # => [typecheck] src/service.ts:42, Type 'string' is not assignable to type 'number'. (+3 more)
+    # fix, then re-run until exit 0
+
+## CLI reference
+
+Commands:
+
+- `hyperfixer run [flags]`: run gates in cost order, write verdict, exit 0/1
+- `hyperfixer init`: detect the stack, write hyperfixer.config.json
+- `hyperfixer hint`: print first actionable fix from last verdict, warns on stderr when the verdict is older than 10 minutes
+- `hyperfixer doctor`: check toolchain and config health
+- `hyperfixer install-hooks`: install git pre-commit (cost <= 50) and pre-push (full pipeline) hooks, never clobbers foreign hooks
+- `hyperfixer install-claude`: install the Claude Code PreToolUse hook into .claude/settings.json
+- `hyperfixer claude-hook`: internal, PreToolUse entry point reading the hook payload from stdin
+
+Run flags:
+
+- `--json`: machine-readable verdict on stdout
+- `--quiet`: no human output, verdict.json still written
+- `--config <path>`: config file, default hyperfixer.config.json
+- `--only <a,b>`: run only the named gates
+- `--max-cost <n>`: run only gates with cost <= n
+- `--changed`: expand {changed} in commands to git-changed files
+- `--no-cache`: ignore and do not update the input-hash cache
+- `--no-fail-fast`: run all gates even after a failure
+- `--out-dir <dir>`: verdict output directory, default .hyperfixer
+
+Exit codes (strict contract, branch on these):
+
+- 0: all gates pass
+- 1: a gate failed, or zero gates executed (an empty pipeline never masquerades as green)
+- 2: usage or config error (a broken config is never exit 1)
+
+## Configuration
+
+hyperfixer.config.json:
+
+    {
+      "failFast": true,
+      "outDir": ".hyperfixer",
+      "gates": [
+        { "name": "lint",      "cost": 5,  "command": ["bunx", "biome", "check", "."],
+          "inputs": ["src/**", "test/**", "biome.json"] },
+        { "name": "typecheck", "cost": 10, "command": ["bunx", "tsc", "--noEmit", "--pretty", "false"],
+          "parser": "tsc", "inputs": ["src/**", "test/**", "tsconfig.json"] },
+        { "name": "unit",      "cost": 30, "command": ["bun", "test"], "parser": "bun-test",
+          "inputs": ["src/**", "test/**"] },
+        { "name": "mutation",  "cost": 100, "command": ["bunx", "stryker", "run", "--incremental"],
+          "enabled": false, "optional": true }
+      ]
+    }
+
+Gate fields:
+
+- `cost` (number, required): gates run in ascending order, equal costs run concurrently as a group, --max-cost filters on it
+- `command` (string[]): argv array, no shell; omit to skip the gate
+- `parser`: "tsc" | "bun-test" | "raw", extracts structured findings from output
+- `optional` (boolean): skip instead of error when the command cannot start
+- `enabled` (boolean): false removes the gate from the pipeline
+- `timeoutMs` (number): kill the gate after this many ms, default 600000, SIGTERM then SIGKILL after 5s
+- `inputs` (string[]): glob patterns the gate depends on, declaring them enables caching
+
+Rules: gate names must be unique (duplicates rejected at load). Failures are never cached. A gate command containing the {changed} token, run with --changed, gets the token expanded to git-changed files (staged, unstaged, untracked, NUL-safe) and is disabled when the tree is clean.
+
+## The verdict (.hyperfixer/verdict.json)
+
+    {
+      "ok": false,
+      "generatedAt": "2026-07-24T10:30:00.000Z",
+      "failedGate": "typecheck",
+      "hint": "[typecheck] src/service.ts:42, Type 'string' is not assignable…",
+      "durationMs": 533,
+      "gates": [
+        {
+          "gate": "typecheck",
+          "status": "fail",
+          "durationMs": 458,
+          "exitCode": 2,
+          "findings": [
+            { "file": "src/service.ts", "line": 42, "column": 5, "code": "TS2322", "message": "…" }
+          ],
+          "outputTail": "…"
+        }
+      ]
+    }
+
+Field notes: `status` is one of pass | fail | skip | error. Cached results carry `"cached": true`. `generatedAt` guards against stale reads. `hint` is the one line an agent should act on first. `ok` is true only when no gate failed AND at least one gate executed.
+
+## Integrations
+
+Universal loop, put in AGENTS.md or CLAUDE.md:
+
+    hyperfixer run --quiet || hyperfixer hint
+    # fix, repeat until exit 0
+
+Git hooks (hard enforcement, every agent and human):
+
+    hyperfixer install-hooks
+    # pre-commit: gates with cost <= 50, pre-push: full pipeline
+
+Claude Code (blocking PreToolUse hook):
+
+    hyperfixer install-claude
+    # intercepts plain git commit and git push, exit 2 blocks with the hint fed back
+    # best effort: aliases and wrappers are not intercepted, pair with git hooks
+
+GitHub Actions:
+
+    - uses: actions/checkout@v4
+    - uses: egeominotti/hyperfixer@main
+      with:
+        max-cost: "50"   # optional, also: config, working-directory
+
+Recommended layering: agent instructions (soft) + agent runtime hook (blocking, best effort) + git hooks (hard, local) + CI action (hard, blocks merges).
+
+## Links
+
+- GitHub: https://github.com/egeominotti/hyperfixer
+- npm: https://www.npmjs.com/package/hyperfixer
+- Docs: https://egeominotti.github.io/hyperfixer/
+- Index for LLMs: https://egeominotti.github.io/hyperfixer/llms.txt

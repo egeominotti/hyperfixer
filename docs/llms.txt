@@ -1,0 +1,35 @@
+# hyperfixer
+
+> Layered verification pipeline for AI-agent-written code. Runs quality gates in cost order, cheapest first, fail-fast, and produces a machine-readable verdict (.hyperfixer/verdict.json) plus a one-line hint so any coding agent (Claude, Codex, Cursor, Kimi, Grok) can fix its own mistakes and retry until green. Bun-only CLI, zero runtime dependencies, MIT.
+
+Key facts:
+
+- Install: `bun add -d hyperfixer` (requires Bun >= 1.1), run with `bunx hyperfixer`
+- Commands: `run`, `init` (detects the stack and generates config), `hint` (first actionable fix, file:line), `doctor`, `install-hooks` (git pre-commit cost <= 50, pre-push full), `install-claude` (Claude Code PreToolUse hook), `claude-hook` (internal stdin entry point)
+- Run flags: `--json`, `--quiet`, `--config <path>`, `--only <a,b>`, `--max-cost <n>`, `--changed`, `--no-cache`, `--no-fail-fast`, `--out-dir <dir>`
+- Exit codes are a strict contract: 0 all gates pass, 1 a gate failed or zero gates executed, 2 usage or config error
+- The agent loop: `hyperfixer run --quiet || hyperfixer hint`, fix, repeat until exit 0
+- Gates are shell commands with a cost; equal costs run concurrently, fail-fast blocks later cost groups only
+- Gates declaring `inputs` globs are cached by input hash (command + path, size, mtime), failures never cached, typical re-verify drops from seconds to milliseconds
+- `{changed}` token in a gate command plus `--changed` expands to git-changed files, gate disabled when the tree is clean
+- Verdict JSON fields: ok, generatedAt, failedGate, hint, durationMs, gates[] with gate, status (pass|fail|skip|error), durationMs, exitCode, findings[] (file, line, column, code, message), outputTail, cached
+- Hanging gates are killed at timeoutMs (default 600000, SIGTERM then SIGKILL), duplicate gate names rejected, an empty pipeline is exit 1, never a false green
+- GitHub Action: `uses: egeominotti/hyperfixer@main` with optional inputs config, max-cost, working-directory
+
+## Docs
+
+- [Home and quick start](https://egeominotti.github.io/hyperfixer/index.html): what it is, gate layers, the agent loop, caching
+- [CLI reference](https://egeominotti.github.io/hyperfixer/cli.html): commands, run flags, exit codes, robustness guarantees
+- [Configuration](https://egeominotti.github.io/hyperfixer/config.html): hyperfixer.config.json, gate fields, caching, changed mode, verdict schema
+- [Agent integrations](https://egeominotti.github.io/hyperfixer/agents.html): universal loop, git hooks, Claude Code, GitHub Actions, recommended layering
+
+## Source
+
+- [GitHub repository](https://github.com/egeominotti/hyperfixer): source, issues, AGENTS.md with contributor rules for AI agents
+- [README](https://github.com/egeominotti/hyperfixer/blob/main/README.md): full reference with examples
+- [CHANGELOG](https://github.com/egeominotti/hyperfixer/blob/main/CHANGELOG.md): auto-generated release history
+- [npm package](https://www.npmjs.com/package/hyperfixer): published with provenance on every green build of main
+
+## Optional
+
+- [AGENTS.md](https://github.com/egeominotti/hyperfixer/blob/main/AGENTS.md): rules for agents contributing to hyperfixer itself, verification commands, repository map, constraints
