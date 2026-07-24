@@ -23,7 +23,7 @@
     "codex"
   ],
   "bin": {
-    "hyperfixer": "./src/cli.ts"
+    "hyperfixer": "src/cli.ts"
   },
   "exports": {
     ".": "./src/index.ts"
