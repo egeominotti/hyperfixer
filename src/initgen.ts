@@ -29,12 +29,13 @@ export function detectGates(): DetectedConfig {
   const gates: GateSpec[] = [];
   const detected: string[] = [];
   const isBun = anyOf("bun.lock", "bun.lockb", "bunfig.toml");
+  const x = isBun ? "bunx" : "npx";
 
   if (anyOf("biome.json", "biome.jsonc")) {
     gates.push({
       name: "lint",
       cost: 5,
-      command: ["bunx", "biome", "check", "."],
+      command: [x, "biome", "check", "."],
       parser: "raw",
       inputs: [...SRC_INPUTS, "biome.json", "biome.jsonc"],
     });
@@ -52,7 +53,7 @@ export function detectGates(): DetectedConfig {
     gates.push({
       name: "lint",
       cost: 5,
-      command: ["bunx", "eslint", "."],
+      command: [x, "eslint", "."],
       parser: "raw",
       inputs: SRC_INPUTS,
     });
@@ -63,7 +64,7 @@ export function detectGates(): DetectedConfig {
     gates.push({
       name: "typecheck",
       cost: 10,
-      command: ["bunx", "tsc", "--noEmit", "--pretty", "false"],
+      command: [x, "tsc", "--noEmit", "--pretty", "false"],
       parser: "tsc",
       inputs: [...SRC_INPUTS, "tsconfig.json"],
     });
@@ -85,7 +86,7 @@ export function detectGates(): DetectedConfig {
     gates.push({
       name: "unit",
       cost: 30,
-      command: ["bunx", "vitest", "run"],
+      command: [x, "vitest", "run"],
       parser: "raw",
       inputs: SRC_INPUTS,
     });

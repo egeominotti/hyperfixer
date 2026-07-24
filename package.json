@@ -1,7 +1,7 @@
 {
   "name": "hyperfixer",
   "version": "0.1.8",
-  "description": "Layered verification pipeline for AI-agent-written code: cost-ordered gates, fail-fast, machine-readable verdicts for self-correction loops. Requires Bun.",
+  "description": "Layered verification pipeline for AI-agent-written code: cost-ordered gates, fail-fast, machine-readable verdicts for self-correction loops. Runs on Node, Bun and Deno.",
   "type": "module",
   "license": "MIT",
   "repository": {
@@ -30,15 +30,21 @@
     "claude",
     "claude-code",
     "codex",
-    "github-actions"
+    "github-actions",
+    "nodejs",
+    "deno"
   ],
   "bin": {
-    "hyperfixer": "src/cli.ts"
+    "hyperfixer": "dist/cli.js"
   },
   "exports": {
-    ".": "./src/index.ts"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
   },
   "files": [
+    "dist",
     "src",
     "assets/cover.svg",
     "CHANGELOG.md"
@@ -50,7 +56,9 @@
     "test": "bun test",
     "typecheck": "tsc --noEmit",
     "lint": "biome check --write .",
-    "check": "bun src/cli.ts run"
+    "check": "bun src/cli.ts run",
+    "build": "tsc -p tsconfig.build.json",
+    "prepack": "npm run build"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.5",
@@ -61,6 +69,6 @@
     "typescript": "^5.3.3"
   },
   "engines": {
-    "bun": ">=1.1.0"
+    "node": ">=20"
   }
 }

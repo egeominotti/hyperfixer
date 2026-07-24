@@ -63,16 +63,22 @@ OK, all gates passed in 2ms
 
 ## Requirements
 
-- [Bun](https://bun.sh) >= 1.1
+Runs on every major JavaScript runtime:
+
+- [Node.js](https://nodejs.org) >= 20 (`npm i -D hyperfixer`, `npx hyperfixer`)
+- [Bun](https://bun.sh) >= 1.1 (`bun add -d hyperfixer`, `bunx hyperfixer`)
+- [Deno](https://deno.com) >= 2 (`deno run -A npm:hyperfixer`)
+
+Zero runtime dependencies, TypeScript types included.
 
 ## Quick start
 
 ```bash
-bun add -d hyperfixer          # from npm
-bunx hyperfixer init           # detects your stack, writes hyperfixer.config.json
-bunx hyperfixer doctor         # verify toolchain
-bunx hyperfixer run            # run the pipeline
-bunx hyperfixer install-hooks  # enforce on git commit and push
+npm i -D hyperfixer            # or: bun add -d hyperfixer, deno add npm:hyperfixer
+npx hyperfixer init            # detects your stack, writes hyperfixer.config.json
+npx hyperfixer doctor          # verify toolchain
+npx hyperfixer run             # run the pipeline
+npx hyperfixer install-hooks   # enforce on git commit and push
 ```
 
 `init` inspects the project (Biome or ESLint, tsconfig, Bun or vitest or npm test, test directories) and generates a tailored gate list instead of a generic default.
@@ -132,7 +138,7 @@ Exit codes: `0` all gates pass, `1` a gate failed, `2` usage or config error. Th
 
 Gate names must be unique; duplicates are rejected at load time. A hanging gate cannot wedge an unattended agent loop: it is killed at `timeoutMs` (SIGTERM, then SIGKILL) and reported as `error`. Gates with equal `cost` run concurrently as a group; fail-fast blocks later groups only.
 
-**Caching**: a gate that declares `inputs` stores its passing result keyed by a hash of command + **file contents** (Bun.hash per file). Touching a file or a checkout that rewrites identical bytes never invalidates; a real content change always does. Failures are never cached; `--no-cache` bypasses it.
+**Caching**: a gate that declares `inputs` stores its passing result keyed by a hash of command + **file contents**. Touching a file or a checkout that rewrites identical bytes never invalidates; a real content change always does. Failures are never cached; `--no-cache` bypasses it.
 
 **Changed-only mode**: put `{changed}` in a gate command and run with `--changed`; the token expands to the files git reports as modified, and the gate is skipped entirely when the tree is clean.
 

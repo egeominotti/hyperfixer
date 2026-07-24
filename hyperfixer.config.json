@@ -108,6 +108,20 @@
       ]
     },
     {
+      "name": "compat",
+      "cost": 70,
+      "command": [
+        "bun",
+        "scripts/compat.ts"
+      ],
+      "parser": "raw",
+      "optional": true,
+      "inputs": [
+        "src/**",
+        "tsconfig.build.json"
+      ]
+    },
+    {
       "name": "mutation",
       "cost": 100,
       "command": [

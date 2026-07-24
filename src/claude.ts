@@ -2,8 +2,9 @@ import { green, red } from "./colors.ts";
 import { loadConfig } from "./config.ts";
 import { writeVerdict } from "./report.ts";
 import { runPipeline } from "./runner.ts";
+import { fileExists, readStdin, readTextFile, writeTextFile } from "./runtime.ts";
 
-const HOOK_COMMAND = "bunx hyperfixer claude-hook";
+const HOOK_COMMAND = "npx --yes hyperfixer claude-hook";
 const SETTINGS_PATH = ".claude/settings.json";
 const GIT_WRITE = /\bgit\b[\s\S]*\b(commit|push)\b/;
 
@@ -16,7 +17,7 @@ const GIT_WRITE = /\bgit\b[\s\S]*\b(commit|push)\b/;
 export async function cmdClaudeHook(configPath: string): Promise<number> {
   let payload: unknown;
   try {
-    payload = JSON.parse(await Bun.stdin.text());
+    payload = JSON.parse(await readStdin());
   } catch {
     return 0;
   }
@@ -55,10 +56,9 @@ interface HookEntry {
  */
 export async function cmdInstallClaude(): Promise<number> {
   let settings: Record<string, unknown> = {};
-  const file = Bun.file(SETTINGS_PATH);
-  if (await file.exists()) {
+  if (fileExists(SETTINGS_PATH)) {
     try {
-      const raw: unknown = await file.json();
+      const raw: unknown = JSON.parse(readTextFile(SETTINGS_PATH));
       if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
         throw new Error("settings root is not an object");
       }
@@ -94,7 +94,7 @@ export async function cmdInstallClaude(): Promise<number> {
       hooks: [{ type: "command", command: HOOK_COMMAND }],
     });
   }
-  await Bun.write(SETTINGS_PATH, `${JSON.stringify(settings, null, 2)}\n`);
+  writeTextFile(SETTINGS_PATH, `${JSON.stringify(settings, null, 2)}\n`);
   console.log(
     `${green("✓")} ${SETTINGS_PATH}: PreToolUse hook ${present ? "already present" : "installed"}`,
   );

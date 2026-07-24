@@ -1,11 +1,12 @@
+import { fileExists, readTextFile } from "./runtime.ts";
 import type { GateSpec, HyperfixerConfig } from "./types.ts";
 
 export const CONFIG_FILE = "hyperfixer.config.json";
 
 /**
  * Default pipeline, ordered by cost. Layers map to verification strata:
- * typecheck (L0) -> type tests (L1) -> unit (L2) -> property-based (L3)
- * -> differential/parity (L4) -> mutation (L5).
+ * lint -> typecheck (L0) -> type tests (L1) -> unit (L2) -> property-based
+ * (L3) -> differential/parity (L4) -> mutation (L5).
  */
 export const DEFAULT_GATES: GateSpec[] = [
   {
@@ -54,9 +55,13 @@ export function defaultConfig(): HyperfixerConfig {
 }
 
 export async function loadConfig(path = CONFIG_FILE): Promise<HyperfixerConfig> {
-  const file = Bun.file(path);
-  if (!(await file.exists())) return defaultConfig();
-  const raw: unknown = await file.json();
+  if (!fileExists(path)) return defaultConfig();
+  let raw: unknown;
+  try {
+    raw = JSON.parse(readTextFile(path));
+  } catch (e) {
+    throw new Error(`${path}: ${e instanceof Error ? e.message : String(e)}`);
+  }
   return normalizeConfig(raw, path);
 }
 

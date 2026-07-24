@@ -1,4 +1,4 @@
-#!/usr/bin/env bun
+#!/usr/bin/env node
 import { cmdClaudeHook, cmdInstallClaude } from "./claude.ts";
 import { cmdDoctor, cmdHint, cmdInit, cmdRun, type RunFlags } from "./commands.ts";
 import { CONFIG_FILE } from "./config.ts";
@@ -143,7 +143,7 @@ async function main(argv: string[]): Promise<number> {
 
 let exitCode: number;
 try {
-  exitCode = await main(Bun.argv.slice(2));
+  exitCode = await main(process.argv.slice(2));
 } catch (e) {
   console.error(e instanceof Error ? e.message : String(e));
   exitCode = 2;

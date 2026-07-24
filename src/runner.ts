@@ -1,4 +1,5 @@
 import { parseOutput } from "./parsers.ts";
+import { spawnCapture } from "./runtime.ts";
 import type {
   GateExecutor,
   GateResult,
@@ -27,32 +28,9 @@ export const spawnExecutor: GateExecutor = async (gate) => {
   }
   try {
     const timeoutMs = gate.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-    let timedOut = false;
-    let killTimer: ReturnType<typeof setTimeout> | undefined;
-    const proc = Bun.spawn(command, { stdout: "pipe", stderr: "pipe" });
-    const timer = setTimeout(() => {
-      // exitCode is non-null once the process has exited: avoid a false
-      // timeout when the gate finishes right at the boundary.
-      if (proc.exitCode !== null) return;
-      timedOut = true;
-      proc.kill();
-      killTimer = setTimeout(() => proc.kill("SIGKILL"), KILL_GRACE_MS);
-    }, timeoutMs);
-    let out: string;
-    let err: string;
-    let exitCode: number;
-    try {
-      [out, err] = await Promise.all([
-        new Response(proc.stdout).text(),
-        new Response(proc.stderr).text(),
-      ]);
-      exitCode = await proc.exited;
-    } finally {
-      clearTimeout(timer);
-      clearTimeout(killTimer);
-    }
-    const combined = out + (err ? `\n${err}` : "");
-    if (timedOut) {
+    const res = await spawnCapture(command, { timeoutMs, killGraceMs: KILL_GRACE_MS });
+    const combined = res.stdout + (res.stderr ? `\n${res.stderr}` : "");
+    if (res.timedOut) {
       return {
         gate: gate.name,
         status: "error",
@@ -66,9 +44,9 @@ export const spawnExecutor: GateExecutor = async (gate) => {
     const findings = parseOutput(gate.parser ?? "raw", combined);
     return {
       gate: gate.name,
-      status: exitCode === 0 ? "pass" : "fail",
+      status: res.exitCode === 0 ? "pass" : "fail",
       durationMs: Math.round(performance.now() - start),
-      exitCode,
+      exitCode: res.exitCode,
       findings,
       outputTail: combined.slice(-TAIL_CHARS),
     };

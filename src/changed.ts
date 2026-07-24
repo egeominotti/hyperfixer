@@ -1,3 +1,4 @@
+import { spawnSyncCapture } from "./runtime.ts";
 import type { GateSpec } from "./types.ts";
 
 export const CHANGED_TOKEN = "{changed}";
@@ -9,13 +10,9 @@ export const CHANGED_TOKEN = "{changed}";
  */
 export function changedFiles(cwd = "."): string[] | null {
   try {
-    const res = Bun.spawnSync(["git", "status", "--porcelain", "-z"], {
-      cwd,
-      stdout: "pipe",
-      stderr: "ignore",
-    });
+    const res = spawnSyncCapture(["git", "status", "--porcelain", "-z"], cwd);
     if (res.exitCode !== 0) return null;
-    const tokens = res.stdout.toString().split("\0");
+    const tokens = res.stdout.split("\0");
     const files: string[] = [];
     for (let i = 0; i < tokens.length; i++) {
       const entry = tokens[i];

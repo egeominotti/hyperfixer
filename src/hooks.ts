@@ -1,5 +1,6 @@
 import { chmodSync } from "node:fs";
 import { bold, green, red } from "./colors.ts";
+import { fileExists, readTextFile, spawnSyncCapture, writeTextFile } from "./runtime.ts";
 
 const MARKER = "# installed by hyperfixer";
 
@@ -8,24 +9,22 @@ function hookScript(maxCost: number | null): string {
   return [
     "#!/bin/sh",
     MARKER,
-    `bunx hyperfixer run --quiet${flag} || { bunx hyperfixer hint; exit 1; }`,
+    "# pick whichever js runtime this machine has",
+    'if command -v bunx >/dev/null 2>&1; then HX="bunx hyperfixer";',
+    'elif command -v npx >/dev/null 2>&1; then HX="npx --yes hyperfixer";',
+    'elif command -v deno >/dev/null 2>&1; then HX="deno run -A npm:hyperfixer";',
+    'else echo "hyperfixer: no js runtime found" >&2; exit 1; fi',
+    `$HX run --quiet${flag} || { $HX hint; exit 1; }`,
     "",
   ].join("\n");
 }
 
 /** Resolve the real hooks dir via git, correct for worktrees and submodules. */
 function gitHooksDir(): string | null {
-  try {
-    const res = Bun.spawnSync(["git", "rev-parse", "--git-path", "hooks"], {
-      stdout: "pipe",
-      stderr: "ignore",
-    });
-    if (res.exitCode !== 0) return null;
-    const dir = res.stdout.toString().trim();
-    return dir === "" ? null : dir;
-  } catch {
-    return null;
-  }
+  const res = spawnSyncCapture(["git", "rev-parse", "--git-path", "hooks"]);
+  if (res.exitCode !== 0) return null;
+  const dir = res.stdout.trim();
+  return dir === "" ? null : dir;
 }
 
 async function installHook(
@@ -34,9 +33,8 @@ async function installHook(
   maxCost: number | null,
 ): Promise<{ line: string; untouched: boolean }> {
   const path = `${hooksDir}/${name}`;
-  const file = Bun.file(path);
-  if (await file.exists()) {
-    const current = await file.text();
+  if (fileExists(path)) {
+    const current = readTextFile(path);
     if (!current.includes(MARKER)) {
       return {
         line: `${red("✗")} ${name}: existing hook not written by hyperfixer, left untouched`,
@@ -44,7 +42,7 @@ async function installHook(
       };
     }
   }
-  await Bun.write(path, hookScript(maxCost));
+  writeTextFile(path, hookScript(maxCost));
   chmodSync(path, 0o755);
   return { line: `${green("✓")} ${name}: ${path}`, untouched: false };
 }

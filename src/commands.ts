@@ -5,6 +5,7 @@ import { CONFIG_FILE, defaultConfig, loadConfig } from "./config.ts";
 import { detectGates } from "./initgen.ts";
 import { readVerdict, renderHuman, writeVerdict } from "./report.ts";
 import { runPipeline, spawnExecutor } from "./runner.ts";
+import { fileExists, spawnSyncCapture, writeTextFile } from "./runtime.ts";
 import type { HyperfixerConfig } from "./types.ts";
 
 const STALE_AFTER_MS = 10 * 60_000;
@@ -75,13 +76,13 @@ export async function cmdRun(flags: RunFlags): Promise<number> {
 }
 
 export async function cmdInit(): Promise<number> {
-  if (await Bun.file(CONFIG_FILE).exists()) {
+  if (fileExists(CONFIG_FILE)) {
     console.error(`${CONFIG_FILE} already exists, not overwriting`);
     return 2;
   }
   const { gates, detected } = detectGates();
   const config: HyperfixerConfig = { ...defaultConfig(), gates };
-  await Bun.write(CONFIG_FILE, `${JSON.stringify(config, null, 2)}\n`);
+  writeTextFile(CONFIG_FILE, `${JSON.stringify(config, null, 2)}\n`);
   console.log(
     detected.length > 0
       ? `detected: ${detected.join(", ")}`
@@ -115,13 +116,8 @@ export async function cmdHint(configPath: string): Promise<number> {
   return verdict.ok ? 0 : 1;
 }
 
-async function toolAvailable(argv: string[]): Promise<boolean> {
-  try {
-    const proc = Bun.spawn(argv, { stdout: "ignore", stderr: "ignore" });
-    return (await proc.exited) === 0;
-  } catch {
-    return false;
-  }
+function toolAvailable(argv: string[]): boolean {
+  return spawnSyncCapture(argv).exitCode === 0;
 }
 
 /** Check toolchain and config health. */
@@ -134,19 +130,22 @@ export async function cmdDoctor(configPath: string): Promise<number> {
     if (!ok) failures++;
   };
 
-  report(await toolAvailable(["bun", "--version"]), "bun");
   report(
-    await toolAvailable(["bunx", "tsc", "--version"]),
+    toolAvailable(["bun", "--version"]) ||
+      toolAvailable(["node", "--version"]) ||
+      toolAvailable(["deno", "--version"]),
+    "runtime (bun, node or deno)",
+  );
+  report(
+    toolAvailable(["bunx", "tsc", "--version"]) ||
+      toolAvailable(["npx", "tsc", "--version"]),
     "typescript (tsc)",
-    "bun add -d typescript",
+    "bun add -d typescript (or npm i -D typescript)",
   );
 
   try {
     const config = await loadConfig(configPath);
-    report(
-      true,
-      `config (${(await Bun.file(configPath).exists()) ? configPath : "defaults"})`,
-    );
+    report(true, `config (${fileExists(configPath) ? configPath : "defaults"})`);
     const enabled = config.gates.filter((g) => g.enabled !== false);
     console.log(
       dim(`  enabled gates: ${enabled.map((g) => g.name).join(", ") || "none"}`),
@@ -156,7 +155,8 @@ export async function cmdDoctor(configPath: string): Promise<number> {
     );
     if (mutation) {
       report(
-        await toolAvailable(["bunx", "stryker", "--version"]),
+        toolAvailable(["bunx", "stryker", "--version"]) ||
+          toolAvailable(["npx", "stryker", "--version"]),
         "stryker (mutation gate enabled)",
         "bun add -d @stryker-mutator/core",
       );

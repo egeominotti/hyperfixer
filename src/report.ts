@@ -1,4 +1,5 @@
 import { bold, cyan, dim, green, red, yellow } from "./colors.ts";
+import { fileExists, readTextFile, writeTextFile } from "./runtime.ts";
 import type { GateResult, GateStatus, Verdict } from "./types.ts";
 
 const STATUS_BADGE: Record<GateStatus, string> = {
@@ -41,7 +42,7 @@ export function renderHuman(verdict: Verdict): string {
 
 export async function writeVerdict(verdict: Verdict, outDir: string): Promise<string> {
   const path = `${outDir}/verdict.json`;
-  await Bun.write(path, `${JSON.stringify(verdict, null, 2)}\n`);
+  writeTextFile(path, `${JSON.stringify(verdict, null, 2)}\n`);
   return path;
 }
 
@@ -51,11 +52,11 @@ export async function writeVerdict(verdict: Verdict, outDir: string): Promise<st
  * deep-checked. A hand-corrupted file may still render oddly, never crash.
  */
 export async function readVerdict(outDir: string): Promise<Verdict | null> {
-  const file = Bun.file(`${outDir}/verdict.json`);
-  if (!(await file.exists())) return null;
+  const path = `${outDir}/verdict.json`;
+  if (!fileExists(path)) return null;
   let raw: unknown;
   try {
-    raw = await file.json();
+    raw = JSON.parse(readTextFile(path));
   } catch {
     return null;
   }

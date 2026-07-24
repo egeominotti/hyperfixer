@@ -1,4 +1,11 @@
-import { readFileSync } from "node:fs";
+import {
+  fileExists,
+  globSync,
+  readBytes,
+  readTextFile,
+  sha256,
+  writeTextFile,
+} from "./runtime.ts";
 import type { GateExecutor, GateResult, GateSpec } from "./types.ts";
 
 interface CacheEntry {
@@ -13,10 +20,10 @@ function cachePath(outDir: string): string {
 }
 
 export async function loadCache(outDir: string): Promise<CacheFile> {
-  const file = Bun.file(cachePath(outDir));
-  if (!(await file.exists())) return {};
+  const path = cachePath(outDir);
+  if (!fileExists(path)) return {};
   try {
-    const raw: unknown = await file.json();
+    const raw: unknown = JSON.parse(readTextFile(path));
     if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return {};
     return raw as CacheFile;
   } catch {
@@ -25,33 +32,31 @@ export async function loadCache(outDir: string): Promise<CacheFile> {
 }
 
 export async function saveCache(outDir: string, cache: CacheFile): Promise<void> {
-  await Bun.write(cachePath(outDir), `${JSON.stringify(cache)}\n`);
+  writeTextFile(cachePath(outDir), `${JSON.stringify(cache)}\n`);
 }
 
 /**
- * Fingerprint a gate: command + parser + content hash of every file matched
- * by its input globs. Content-based (Bun.hash, wyhash) so touching a file or
- * a checkout that rewrites identical bytes never invalidates, and a real
- * content change always does. Gates without inputs return null, never cached.
+ * Fingerprint a gate: command + parser + content of every file matched by its
+ * input globs. Content-based, so touching a file or a checkout that rewrites
+ * identical bytes never invalidates, and a real content change always does.
+ * Gates without inputs return null, never cached.
  */
 export function gateHash(gate: GateSpec, cwd = "."): string | null {
   const inputs = gate.inputs;
   if (!inputs || inputs.length === 0) return null;
-  const hasher = new Bun.CryptoHasher("sha256");
+  const hasher = sha256();
   hasher.update(JSON.stringify({ command: gate.command, parser: gate.parser }));
   const paths: string[] = [];
   for (const pattern of inputs) {
-    for (const path of new Bun.Glob(pattern).scanSync({ cwd, dot: false })) {
-      paths.push(path);
-    }
+    paths.push(...globSync(pattern, cwd));
   }
   paths.sort();
   for (const path of paths) {
+    hasher.update(`${path} `);
     try {
-      const content = readFileSync(`${cwd}/${path}`);
-      hasher.update(`${path} ${Bun.hash(content).toString(16)} `);
+      hasher.update(readBytes(`${cwd}/${path}`));
     } catch {
-      hasher.update(`${path} gone `);
+      hasher.update("gone");
     }
   }
   return hasher.digest("hex");
