@@ -1,0 +1,4 @@
+node_modules/
+.hyperfixer/
+*.log
+.DS_Store

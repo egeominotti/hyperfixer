@@ -1,0 +1,56 @@
+export type GateStatus = "pass" | "fail" | "skip" | "error";
+
+/** A single actionable problem, normalized so an agent can jump to it. */
+export interface Finding {
+  file?: string;
+  line?: number;
+  column?: number;
+  code?: string;
+  message: string;
+}
+
+export interface GateResult {
+  gate: string;
+  status: GateStatus;
+  durationMs: number;
+  exitCode: number | null;
+  findings: Finding[];
+  /** Raw tail of combined output, for context when findings parsing is incomplete. */
+  outputTail: string;
+  /** Why the gate was skipped or errored, when applicable. */
+  note?: string;
+}
+
+export type ParserKind = "tsc" | "bun-test" | "raw";
+
+export interface GateSpec {
+  name: string;
+  /** Relative cost; gates run in ascending order. */
+  cost: number;
+  /** Command argv. Missing/empty command => gate skipped. */
+  command?: string[];
+  /** Skip (instead of error) when the command cannot start or is absent. */
+  optional?: boolean;
+  parser?: ParserKind;
+  enabled?: boolean;
+}
+
+export interface HyperfixerConfig {
+  gates: GateSpec[];
+  /** Stop at first failing gate. Default true. */
+  failFast: boolean;
+  /** Directory where verdict.json is written. Default ".hyperfixer". */
+  outDir: string;
+}
+
+export interface Verdict {
+  ok: boolean;
+  /** Name of the first gate that failed or errored, null when ok. */
+  failedGate: string | null;
+  gates: GateResult[];
+  durationMs: number;
+  /** One-line, agent-consumable summary of what to fix first. */
+  hint: string | null;
+}
+
+export type GateExecutor = (gate: GateSpec) => Promise<GateResult>;
